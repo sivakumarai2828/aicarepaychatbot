@@ -1,5 +1,4 @@
 import { ChatWindow } from './components/chat';
-import { SpeechProvider } from './contexts/SpeechContext';
 import { VoiceModeProvider } from './contexts/VoiceModeContext';
 import { PaymentConfirmation } from './components/PaymentConfirmation';
 import { SecurePaymentForm } from './components/SecurePaymentForm';
@@ -84,9 +83,8 @@ function App() {
   }, []);
 
   return (
-    <SpeechProvider>
-      <VoiceModeProvider onMessage={handleVoiceMessage}>
-        <div className="relative min-h-screen">
+    <VoiceModeProvider onMessage={handleVoiceMessage}>
+      <div className="relative min-h-screen">
         {showPaymentForm && paymentFormData ? (
           <SecurePaymentForm
             paymentSummary={paymentFormData.paymentSummary}
@@ -137,8 +135,7 @@ function App() {
           voiceMessages={chatMessages}
         />
       </div>
-      </VoiceModeProvider>
-    </SpeechProvider>
+    </VoiceModeProvider>
   );
 }
 
