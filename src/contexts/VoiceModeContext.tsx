@@ -5,8 +5,22 @@ import type { Message } from '../types/chat';
 import { bills } from '../constants/bills';
 
 const mockAccounts = [
-  { id: 'acc_1', phone: '555-0123', email: 'user@example.com', lastFour: '5678' },
-  { id: 'acc_2', phone: '555-0456', email: 'test@example.com', lastFour: '4321' }
+  {
+    id: 'acc_1',
+    firstName: 'Siva',
+    lastName: 'Kumar',
+    phone: '9166065168',
+    email: 'siva.kumar@example.com',
+    lastFour: '5678'
+  },
+  {
+    id: 'acc_2',
+    firstName: 'John',
+    lastName: 'Doe',
+    phone: '555-0123',
+    email: 'john.doe@example.com',
+    lastFour: '9876'
+  }
 ];
 
 interface VoiceModeContextType {
@@ -66,9 +80,18 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
 
     switch (name) {
       case 'lookup_account':
-        const account = mockAccounts.find(
-          (acc: any) => acc.phone === parsedArgs.identifier || acc.email === parsedArgs.identifier
-        );
+        const identifier = parsedArgs.identifier || '';
+        const normalizedIdentifier = identifier.replace(/\D/g, '');
+
+        const account = mockAccounts.find((acc: any) => {
+          const normalizedPhone = acc.phone.replace(/\D/g, '');
+          return normalizedPhone === normalizedIdentifier ||
+                 acc.email?.toLowerCase() === identifier.toLowerCase() ||
+                 (parsedArgs.firstName && parsedArgs.lastName &&
+                  acc.firstName?.toLowerCase() === parsedArgs.firstName.toLowerCase() &&
+                  acc.lastName?.toLowerCase() === parsedArgs.lastName.toLowerCase());
+        });
+
         result = account
           ? { success: true, account }
           : { success: false, error: 'Account not found' };
