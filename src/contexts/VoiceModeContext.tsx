@@ -100,6 +100,17 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
       case 'get_bills':
         const accountBills = bills.filter((bill: any) => bill.id);
         result = { success: true, bills: accountBills };
+
+        addMessageToHistory({
+          id: Date.now().toString(),
+          text: 'Here are your bills. Please select one to continue:',
+          sender: 'bot',
+          timestamp: new Date(),
+          metadata: {
+            type: 'bill_selection',
+            bills: accountBills
+          }
+        });
         break;
 
       case 'process_payment':
