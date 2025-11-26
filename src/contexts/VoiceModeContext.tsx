@@ -18,6 +18,7 @@ interface VoiceModeContextType {
   startRecording: () => Promise<void>;
   stopRecording: () => void;
   addMessageToHistory: (message: Message) => void;
+  sendTextMessage: (text: string) => void;
 }
 
 const VoiceModeContext = createContext<VoiceModeContextType | undefined>(undefined);
@@ -202,6 +203,35 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
     setIsRecording(false);
   }, []);
 
+  const sendTextMessage = useCallback((text: string) => {
+    if (!isVoiceMode) return;
+
+    addMessageToHistory({
+      id: Date.now().toString(),
+      text,
+      sender: 'user',
+      timestamp: new Date()
+    });
+
+    realtimeService.sendEvent({
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text
+          }
+        ]
+      }
+    });
+
+    realtimeService.sendEvent({
+      type: 'response.create'
+    });
+  }, [isVoiceMode, addMessageToHistory]);
+
   useEffect(() => {
     return () => {
       if (isVoiceMode) {
@@ -218,7 +248,8 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
     toggleVoiceMode,
     startRecording,
     stopRecording,
-    addMessageToHistory
+    addMessageToHistory,
+    sendTextMessage
   };
 
   return (

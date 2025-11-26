@@ -205,15 +205,22 @@ Use the provided functions to perform actions. Always acknowledge what you're do
     }
 
     try {
-      const binaryData = atob(event.delta);
-      const arrayBuffer = new ArrayBuffer(binaryData.length * 2);
-      const view = new DataView(arrayBuffer);
-
-      for (let i = 0; i < binaryData.length; i++) {
-        view.setInt16(i * 2, binaryData.charCodeAt(i) << 8, true);
+      const binaryString = atob(event.delta);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
       }
 
-      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      const int16Array = new Int16Array(bytes.buffer);
+      const float32Array = new Float32Array(int16Array.length);
+
+      for (let i = 0; i < int16Array.length; i++) {
+        float32Array[i] = int16Array[i] / 32768.0;
+      }
+
+      const audioBuffer = this.audioContext.createBuffer(1, float32Array.length, 24000);
+      audioBuffer.getChannelData(0).set(float32Array);
+
       this.audioQueue.push(audioBuffer);
 
       if (!this.isPlaying) {

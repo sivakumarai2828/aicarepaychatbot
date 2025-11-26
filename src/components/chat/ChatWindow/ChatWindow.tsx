@@ -44,10 +44,11 @@ export const ChatWindow = React.memo(function ChatWindow({
     isLoading,
     handlers,
     setIsMinimized
-  } = useChatWindow({ 
+  } = useChatWindow({
     onPaymentConfirmed,
     onShowPaymentForm,
-    onBackgroundChange
+    onBackgroundChange,
+    voiceMessages
   });
 
   const handleMinimize = React.useCallback(() => {
