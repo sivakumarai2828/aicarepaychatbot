@@ -8,7 +8,7 @@ interface ChatInputProps {
 
 export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage }) => {
   const [message, setMessage] = useState('');
-  const { isVoiceMode, isConnecting, isRecording, toggleVoiceMode, startRecording, stopRecording, sendTextMessage } = useVoiceMode();
+  const { isVoiceMode, isConnecting, isRecording, toggleVoiceMode, toggleRecording, sendTextMessage } = useVoiceMode();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -22,9 +22,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage }) => {
     }
   };
 
-  const handleMicClick = () => {
+  const handleMicClick = async () => {
     if (!isVoiceMode) {
-      toggleVoiceMode();
+      await toggleVoiceMode();
+    } else {
+      await toggleRecording();
     }
   };
 
@@ -35,18 +37,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage }) => {
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder={isVoiceMode ? "Voice mode active - type or hold mic to talk..." : "Type your message..."}
+          placeholder={isVoiceMode ? "Voice mode active - click mic to talk..." : "Type your message..."}
           className="flex-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           aria-label="Message input"
         />
         <button
           type="button"
-          onMouseDown={isVoiceMode ? startRecording : undefined}
-          onMouseUp={isVoiceMode ? stopRecording : undefined}
-          onMouseLeave={isVoiceMode ? stopRecording : undefined}
-          onTouchStart={isVoiceMode ? startRecording : undefined}
-          onTouchEnd={isVoiceMode ? stopRecording : undefined}
-          onClick={!isVoiceMode ? handleMicClick : undefined}
+          onClick={handleMicClick}
           disabled={isConnecting}
           className={`
             p-3 rounded-full transition-all duration-200 flex-shrink-0
@@ -59,14 +56,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage }) => {
             ${isConnecting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
             text-white
           `}
-          title={isVoiceMode ? "Hold to talk" : "Enable voice mode"}
+          title={isRecording ? "Stop recording" : isVoiceMode ? "Start recording" : "Enable voice mode"}
         >
           <FaMicrophone className={`text-lg ${isRecording ? 'animate-pulse' : ''}`} />
         </button>
       </div>
       {isVoiceMode && (
         <div className="text-xs text-green-600 mt-1 text-center">
-          Voice mode active - Hold mic to talk
+          {isRecording ? 'Recording... Click mic to stop' : 'Voice mode active - Click mic to talk'}
         </div>
       )}
     </form>

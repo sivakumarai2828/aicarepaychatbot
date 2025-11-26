@@ -15,8 +15,7 @@ interface VoiceModeContextType {
   isRecording: boolean;
   transcript: string;
   toggleVoiceMode: () => Promise<void>;
-  startRecording: () => Promise<void>;
-  stopRecording: () => void;
+  toggleRecording: () => Promise<void>;
   addMessageToHistory: (message: Message) => void;
   sendTextMessage: (text: string) => void;
 }
@@ -208,6 +207,27 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
     setIsRecording(false);
   }, []);
 
+  const toggleRecording = useCallback(async () => {
+    if (!isVoiceMode) return;
+
+    if (isRecording) {
+      stopRecording();
+    } else {
+      try {
+        await realtimeService.startRecording();
+        setIsRecording(true);
+      } catch (error) {
+        console.error('Failed to start recording:', error);
+        addMessageToHistory({
+          id: Date.now().toString(),
+          text: 'Could not access microphone. Please check permissions.',
+          sender: 'bot',
+          timestamp: new Date()
+        });
+      }
+    }
+  }, [isVoiceMode, isRecording, stopRecording, addMessageToHistory]);
+
   const sendTextMessage = useCallback((text: string) => {
     if (!isVoiceMode) return;
 
@@ -251,8 +271,7 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
     isRecording,
     transcript,
     toggleVoiceMode,
-    startRecording,
-    stopRecording,
+    toggleRecording,
     addMessageToHistory,
     sendTextMessage
   };
