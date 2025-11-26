@@ -144,9 +144,16 @@ export const useChatWindow = ({
   }, [conversationState.context, conversationState.paymentFlow?.paymentSummary]);
 
   useEffect(() => {
+    console.log('🔄 Voice messages sync check:', {
+      voiceMessagesLength: voiceMessages.length,
+      lastCount: lastVoiceMessageCountRef.current
+    });
+
     if (voiceMessages.length > lastVoiceMessageCountRef.current) {
       const newMessages = voiceMessages.slice(lastVoiceMessageCountRef.current);
+      console.log('✅ Syncing new voice messages to chat:', newMessages);
       newMessages.forEach(msg => {
+        console.log('➡️ Adding voice message:', msg.text, 'from:', msg.sender);
         addMessages(msg);
       });
       lastVoiceMessageCountRef.current = voiceMessages.length;

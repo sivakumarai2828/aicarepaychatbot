@@ -180,6 +180,8 @@ Use the provided functions to perform actions. Always acknowledge what you're do
     try {
       const event: RealtimeEvent = JSON.parse(data);
 
+      console.log('📡 Realtime event received:', event.type);
+
       this.emit(event.type, event);
       this.emit('*', event);
 
@@ -189,6 +191,11 @@ Use the provided functions to perform actions. Always acknowledge what you're do
           break;
         case 'response.function_call_arguments.done':
           this.handleFunctionCall(event);
+          break;
+        case 'conversation.item.input_audio_transcription.completed':
+        case 'response.audio_transcript.delta':
+        case 'response.audio_transcript.done':
+          console.log('📝 Transcript event:', event.type, event);
           break;
         case 'error':
           console.error('Realtime API error:', event);

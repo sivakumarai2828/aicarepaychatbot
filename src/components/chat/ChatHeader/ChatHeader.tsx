@@ -1,15 +1,14 @@
 import React from 'react';
 import { IoClose, IoRemove } from 'react-icons/io5';
 import { BotAvatar } from '../../BotAvatar';
-import { SpeechToggle } from '../../SpeechToggle/SpeechToggle';
 
 interface ChatHeaderProps {
   onClose: () => void;
   onMinimize: () => void;
 }
 
-export const ChatHeader: React.FC<ChatHeaderProps> = ({ 
-  onClose, 
+export const ChatHeader: React.FC<ChatHeaderProps> = ({
+  onClose,
   onMinimize
 }) => {
   return (
@@ -25,7 +24,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </div>
       </div>
       <div className="flex gap-2 items-center">
-        <SpeechToggle />
         <button
           onClick={onMinimize}
           className="hover:text-gray-300 transition-colors p-1"

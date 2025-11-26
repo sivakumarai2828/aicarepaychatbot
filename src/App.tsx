@@ -23,7 +23,11 @@ function App() {
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
 
   const handleVoiceMessage = useCallback((message: Message) => {
-    setChatMessages(prev => [...prev, message]);
+    console.log('📨 App received voice message:', message);
+    setChatMessages(prev => {
+      console.log('📝 Current messages:', prev.length, 'Adding message from:', message.sender);
+      return [...prev, message];
+    });
   }, []);
 
   const handlePaymentConfirmed = useCallback((data: {

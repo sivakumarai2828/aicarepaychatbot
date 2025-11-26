@@ -118,9 +118,12 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
   }, [addMessageToHistory]);
 
   const handleTranscript = useCallback((event: RealtimeEvent) => {
+    console.log('🎤 Voice transcript event:', event.type, event);
+
     if (event.type === 'conversation.item.input_audio_transcription.completed') {
       setTranscript(event.transcript || '');
       if (event.transcript) {
+        console.log('👤 User voice message:', event.transcript);
         addMessageToHistory({
           id: Date.now().toString(),
           text: event.transcript,
@@ -132,6 +135,7 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
       setTranscript(prev => prev + (event.delta || ''));
     } else if (event.type === 'response.audio_transcript.done') {
       if (event.transcript) {
+        console.log('🤖 Bot voice response:', event.transcript);
         addMessageToHistory({
           id: Date.now().toString(),
           text: event.transcript,
@@ -139,6 +143,7 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
           timestamp: new Date()
         });
       }
+      setTranscript('');
     }
   }, [addMessageToHistory]);
 
