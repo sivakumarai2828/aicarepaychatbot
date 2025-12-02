@@ -1,7 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { Message } from '../../../types/interfaces';
-import { BotAvatar } from '../../BotAvatar';
-import { BillDisplay } from '../../BillDisplay';
+import { BotAvatar } from '../../BotAvatar/BotAvatar';
+import { BillDisplay } from '../../BillDisplay/BillDisplay';
+import { PaymentPlanSelector } from '../PaymentPlanSelector/PaymentPlanSelector';
+import { PaymentDetailsCard } from '../PaymentDetailsCard/PaymentDetailsCard';
 
 interface ChatMessageProps {
   message: Message;
@@ -24,6 +26,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   }, [isLatest, message.id, onMessageDisplay]);
 
   const hasBillSelection = message.metadata?.type === 'bill_selection' && message.metadata?.bills;
+  const hasPlanSelection = message.metadata?.type === 'plan_selection' && message.metadata?.plans;
+  const hasPaymentSummary = message.metadata?.type === 'payment_summary' && message.metadata?.summary;
 
   return (
     <div
@@ -33,9 +37,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     >
       {isBot && <BotAvatar />}
       <div
-        className={`max-w-[70%] p-4 rounded-lg ${
-          isBot ? 'bg-white shadow-sm ml-2' : 'bg-teal-600 text-white'
-        }`}
+        className={`max-w-[85%] p-4 rounded-lg ${isBot ? 'bg-white shadow-sm ml-2' : 'bg-teal-600 text-white'
+          }`}
       >
         <p className="break-words whitespace-pre-wrap">{message.text}</p>
 
@@ -53,6 +56,25 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
                 }}
               />
             ))}
+          </div>
+        )}
+
+        {hasPlanSelection && (
+          <div className="mt-4">
+            <PaymentPlanSelector
+              plans={message.metadata!.plans}
+              onSelect={(planId) => {
+                window.dispatchEvent(new CustomEvent('planSelected', {
+                  detail: { planId }
+                }));
+              }}
+            />
+          </div>
+        )}
+
+        {hasPaymentSummary && (
+          <div className="mt-4">
+            <PaymentDetailsCard summary={message.metadata!.summary} />
           </div>
         )}
 

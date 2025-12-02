@@ -3,6 +3,7 @@ export interface Bill {
   provider: string;
   amount: number;
   paymentOptions: PaymentOption[];
+  paymentPlans?: PaymentPlan[];
 }
 
 export interface PaymentOption {
@@ -90,5 +91,9 @@ export interface MessageHandlersProps {
   handleConfirmation: (confirmationNumber: string) => Promise<void>;
   handleFollowUp: (wantsMoreHelp: boolean) => Promise<void>;
   handlePaymentMethodSelect: (method: string) => Promise<void>;
+  handleOTPVerification: (otp: string) => Promise<void>;
+  handleResendOTP: () => Promise<void>;
   setConversationState: (state: (prev: ConversationState) => ConversationState) => void;
+  onBackgroundChange?: (showMain: boolean) => void;
+  onShowPaymentForm?: (paymentSummary: PaymentSummary) => void;
 }

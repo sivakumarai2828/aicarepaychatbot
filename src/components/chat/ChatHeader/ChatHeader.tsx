@@ -1,6 +1,6 @@
 import React from 'react';
 import { IoClose, IoRemove } from 'react-icons/io5';
-import { BotAvatar } from '../../BotAvatar';
+import { BotAvatar } from '../../BotAvatar/BotAvatar';
 
 interface ChatHeaderProps {
   onClose: () => void;

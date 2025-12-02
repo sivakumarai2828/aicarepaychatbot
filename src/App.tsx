@@ -1,14 +1,17 @@
 import { ChatWindow } from './components/chat';
 import { VoiceModeProvider } from './contexts/VoiceModeContext';
-import { PaymentConfirmation } from './components/PaymentConfirmation';
-import { SecurePaymentForm } from './components/SecurePaymentForm';
+import { PaymentConfirmation } from './components/PaymentConfirmation/PaymentConfirmation';
+import { SecurePaymentForm } from './components/SecurePaymentForm/SecurePaymentForm';
+import { WelcomeView, BillsView, PaymentPlansView } from './components/views';
 import { useState, useCallback } from 'react';
 import { PaymentSummary } from './types/interfaces';
 import type { Message } from './types/chat';
+import type { ViewState } from './types/viewState';
+import type { Bill, PaymentPlan } from './types/chat';
+import { bills } from './constants/bills';
 
 function App() {
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [showMainContent, setShowMainContent] = useState(true);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [confirmationData, setConfirmationData] = useState<{
     confirmationNumber: string;
@@ -18,15 +21,49 @@ function App() {
   const [paymentFormData, setPaymentFormData] = useState<{
     paymentSummary: PaymentSummary;
   } | null>(null);
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<Message[]>([]);
+
+  // New view state management
+  const [currentView, setCurrentView] = useState<ViewState>('welcome');
+  const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
 
   const handleVoiceMessage = useCallback((message: Message) => {
     console.log('📨 App received voice message:', message);
     setChatMessages(prev => {
+      // Check for duplicates before adding
+      const existingIds = new Set(prev.map(m => m.id));
+      const existingKeys = new Set(
+        prev.map(m => `${m.sender}:${m.text.substring(0, 100)}`)
+      );
+      const messageKey = `${message.sender}:${message.text.substring(0, 100)}`;
+
+      const isDuplicate = existingIds.has(message.id) || existingKeys.has(messageKey);
+      if (isDuplicate) {
+        console.log('⏭️ App: Skipping duplicate voice message:', message.text.substring(0, 50));
+        return prev;
+      }
+
       console.log('📝 Current messages:', prev.length, 'Adding message from:', message.sender);
       return [...prev, message];
     });
+
+    // Update view based on message content
+    const text = message.text.toLowerCase();
+    if (text.includes('bill') && message.sender === 'user') {
+      setCurrentView('bills');
+    }
+  }, []);
+
+  const handleBillSelect = useCallback((bill: Bill) => {
+    console.log('📋 Bill selected:', bill);
+    setSelectedBill(bill);
+    setCurrentView('payment-plans');
+  }, []);
+
+  const handlePlanSelect = useCallback((plan: PaymentPlan) => {
+    console.log('📅 Plan selected:', plan);
+    // This would trigger the payment form
+    // For now, we'll keep using the existing flow
   }, []);
 
   const handlePaymentConfirmed = useCallback((data: {
@@ -37,13 +74,13 @@ function App() {
     if (data.confirmationNumber && data.paymentSummary.balance > 0) {
       setConfirmationData(data);
       setShowConfirmation(true);
-      setShowMainContent(false);
       setShowPaymentForm(false);
+      setCurrentView('confirmation');
     } else {
       setConfirmationData(null);
       setShowConfirmation(false);
-      setShowMainContent(true);
       setShowPaymentForm(false);
+      setCurrentView('welcome');
     }
   }, []);
 
@@ -51,20 +88,20 @@ function App() {
     console.log('🔐 App: Showing payment form with summary:', paymentSummary);
     setPaymentFormData({ paymentSummary });
     setShowPaymentForm(true);
-    setShowMainContent(false);
     setShowConfirmation(false);
+    setCurrentView('payment-form');
   }, []);
 
   const handlePaymentFormClose = useCallback(() => {
     console.log('🔒 App: Closing payment form');
     setShowPaymentForm(false);
     setPaymentFormData(null);
-    setShowMainContent(true);
+    setCurrentView('welcome');
   }, []);
 
   const handlePaymentComplete = useCallback(() => {
     console.log('🎯 App: Payment completed - checking for chatbot callback');
-    
+
     // The chatbot should handle this through the global callback
     // This is just a fallback in case the global callback isn't set
     if (!window.paymentFormCompletionCallback) {
@@ -72,66 +109,88 @@ function App() {
       // Fallback behavior - just close the form
       setShowPaymentForm(false);
       setPaymentFormData(null);
-      setShowMainContent(true);
+      setCurrentView('success');
     }
   }, []);
 
   const handleClose = useCallback(() => {
     setShowConfirmation(false);
     setConfirmationData(null);
-    setShowMainContent(true);
+    setCurrentView('welcome');
   }, []);
+
+  const handleViewChange = useCallback((view: 'welcome' | 'bills' | 'payment-plans', data?: any) => {
+    console.log('🎨 View change requested:', view, data);
+    setCurrentView(view);
+    if (view === 'payment-plans' && data?.bill) {
+      setSelectedBill(data.bill);
+    }
+  }, []);
+
+  // Render the appropriate view based on current state
+  const renderMainContent = () => {
+    if (showPaymentForm && paymentFormData) {
+      return (
+        <SecurePaymentForm
+          paymentSummary={paymentFormData.paymentSummary}
+          onClose={handlePaymentFormClose}
+          onPaymentComplete={handlePaymentComplete}
+        />
+      );
+    }
+
+    if (showConfirmation && confirmationData) {
+      return (
+        <div className="h-screen overflow-auto">
+          <PaymentConfirmation
+            confirmationNumber={confirmationData.confirmationNumber}
+            paymentSummary={confirmationData.paymentSummary}
+            email={confirmationData.email}
+            onClose={handleClose}
+          />
+        </div>
+      );
+    }
+
+    // Render views based on currentView state
+    switch (currentView) {
+      case 'bills':
+        return <BillsView bills={bills} onBillSelect={handleBillSelect} />;
+
+      case 'payment-plans':
+        return selectedBill ? (
+          <PaymentPlansView bill={selectedBill} onPlanSelect={handlePlanSelect} />
+        ) : (
+          <WelcomeView />
+        );
+
+      case 'welcome':
+      default:
+        return <WelcomeView />;
+    }
+  };
 
   return (
     <VoiceModeProvider onMessage={handleVoiceMessage}>
-      <div className="relative min-h-screen">
-        {showPaymentForm && paymentFormData ? (
-          <SecurePaymentForm
-            paymentSummary={paymentFormData.paymentSummary}
-            onClose={handlePaymentFormClose}
-            onPaymentComplete={handlePaymentComplete}
-          />
-        ) : showConfirmation && confirmationData ? (
-          <div className="absolute inset-0 transition-opacity duration-300">
-            <PaymentConfirmation
-              confirmationNumber={confirmationData.confirmationNumber}
-              paymentSummary={confirmationData.paymentSummary}
-              email={confirmationData.email}
-              onClose={handleClose}
-            />
-          </div>
-        ) : showMainContent ? (
-          <div className="relative z-10">
-            <div className="absolute inset-0">
-              <div className="absolute inset-0 bg-gradient-to-b from-teal-600 via-teal-500/30 to-white" />
-              <div className="absolute inset-0 bg-white/50" />
-              <div className="relative z-10 flex items-center min-h-screen">
-                <div className={`transition-all duration-500 px-8 ${isChatOpen ? 'max-w-[calc(100%-24rem)] pr-4' : 'max-w-2xl mx-auto'}`}>
-                  <div className={`transition-all duration-500 ${isChatOpen ? '-mt-32' : '-mt-32'}`}>
-                    <h1 className={`text-3xl font-bold text-teal-600 mb-4 ${isChatOpen ? 'text-left' : 'text-center'}`}>
-                      Seamless Payments, Flexible Options
-                    </h1>
-                    <p className={`text-gray-600 text-lg leading-relaxed ${isChatOpen ? 'text-left' : 'text-center'}`}>
-                      With just a few clicks, our chatbot helps you make hassle-free payments with convenient financing options. Easily manage your transactions at your own pace, while enjoying a simple and intuitive experience. Make smarter, flexible payments—all in one place, using our quick and easy chatbot interface.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="relative z-10">
-            <div className="absolute inset-0">
-              <div className="absolute inset-0 bg-[#e8f3f3]" />
-              <div className="absolute inset-0 bg-gradient-to-b from-[#e8f3f3] via-[#f0f7f7] to-white opacity-80" />
-            </div>
-          </div>
-        )}
+      <div className="relative min-h-screen flex">
+        {/* Main Content Area - Left Side (70%) */}
+        <div className="flex-1 overflow-auto">
+          {renderMainContent()}
+        </div>
+
+        {/* Chat Panel - Right Side (30%) */}
         <ChatWindow
           onPaymentConfirmed={handlePaymentConfirmed}
           onShowPaymentForm={handleShowPaymentForm}
-          onChatStateChange={(isOpen) => setIsChatOpen(isOpen)}
-          onBackgroundChange={(showMain) => setShowMainContent(showMain)}
+          onViewChange={handleViewChange}
+          onChatStateChange={(isOpen) => {
+            // Handle chat state changes if needed
+            console.log('Chat is', isOpen ? 'open' : 'closed');
+          }}
+          onBackgroundChange={(showMain) => {
+            // Handle background changes if needed
+            console.log('Background change:', showMain);
+          }}
           voiceMessages={chatMessages}
         />
       </div>

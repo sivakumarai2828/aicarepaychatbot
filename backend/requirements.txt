@@ -1,0 +1,19 @@
+# Web framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+websockets==12.0
+
+# Utilities
+python-dotenv==1.0.0
+pydantic==2.5.3
+aiohttp~=3.9.5
+requests==2.31.0
+
+# OpenAI SDK (for direct API calls)
+openai>=1.0.0
+
+# Speechmatics SDK (for STT)
+# speechmatics-rt
+
+# Cartesia SDK (for TTS)
+# cartesia

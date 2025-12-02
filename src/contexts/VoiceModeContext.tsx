@@ -86,10 +86,10 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
         const account = mockAccounts.find((acc: any) => {
           const normalizedPhone = acc.phone.replace(/\D/g, '');
           return normalizedPhone === normalizedIdentifier ||
-                 acc.email?.toLowerCase() === identifier.toLowerCase() ||
-                 (parsedArgs.firstName && parsedArgs.lastName &&
-                  acc.firstName?.toLowerCase() === parsedArgs.firstName.toLowerCase() &&
-                  acc.lastName?.toLowerCase() === parsedArgs.lastName.toLowerCase());
+            acc.email?.toLowerCase() === identifier.toLowerCase() ||
+            (parsedArgs.firstName && parsedArgs.lastName &&
+              acc.firstName?.toLowerCase() === parsedArgs.firstName.toLowerCase() &&
+              acc.lastName?.toLowerCase() === parsedArgs.lastName.toLowerCase());
         });
 
         result = account
@@ -98,19 +98,90 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
         break;
 
       case 'get_bills':
-        const accountBills = bills.filter((bill: any) => bill.id);
-        result = { success: true, bills: accountBills };
+        // Dispatch event to update UI - bills will be shown visually
+        if (typeof window !== 'undefined') {
+          console.log('Dispatching billsRequested event');
+          window.dispatchEvent(new CustomEvent('billsRequested'));
+        }
 
-        addMessageToHistory({
-          id: Date.now().toString(),
-          text: 'Here are your bills. Please select one to continue:',
-          sender: 'bot',
-          timestamp: new Date(),
-          metadata: {
-            type: 'bill_selection',
-            bills: accountBills
+        result = {
+          success: true,
+          message: 'Bills are now displayed on the screen for you to review.'
+        };
+
+        // Let OpenAI handle the response naturally - don't add message here
+        // This prevents duplicate responses
+        break;
+
+
+
+      case 'show_payment_plans':
+        const showPlansBillId = parsedArgs.bill_id;
+
+        // Check if bill_id is provided
+        if (!showPlansBillId) {
+          result = {
+            success: false,
+            error: `Please specify which bill you'd like to see payment plans for. Available bills: ${bills.map((b: any) => b.provider).join(', ')}`
+          };
+          break;
+        }
+
+        // Try to find bill by ID first, then by provider name (case-insensitive)
+        let targetBill = bills.find((b: any) => b.id === showPlansBillId);
+
+        if (!targetBill) {
+          // Try matching by provider name (case-insensitive, partial match)
+          const searchTerm = showPlansBillId.toLowerCase();
+          targetBill = bills.find((b: any) =>
+            b.provider.toLowerCase().includes(searchTerm) ||
+            searchTerm.includes(b.provider.toLowerCase())
+          );
+        }
+
+        if (targetBill) {
+          // Dispatch event to show payment plans for this bill
+          if (typeof window !== 'undefined') {
+            console.log('Dispatching billSelected event for payment plans:', targetBill.id);
+            window.dispatchEvent(new CustomEvent('billSelected', {
+              detail: { billId: targetBill.id }
+            }));
           }
-        });
+          result = {
+            success: true,
+            message: `Payment plans are now displayed on screen for ${targetBill.provider}.`
+          };
+        } else {
+          result = {
+            success: false,
+            error: `Bill not found. Available bills: ${bills.map((b: any) => b.provider).join(', ')}`
+          };
+        }
+        break;
+
+      case 'select_payment_plan':
+        const { bill_id, plan_id } = parsedArgs;
+        // Find the bill and plan to verify
+        const bill = bills.find((b: any) => b.id === bill_id);
+        const plan = bill?.paymentPlans?.find((p: any) => p.id === plan_id);
+
+        if (bill && plan) {
+          // Dispatch event to update UI
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('planSelected', {
+              detail: { planId: plan_id, billId: bill_id }
+            }));
+          }
+          result = {
+            success: true,
+            message: `Selected ${plan.label} for bill ${bill.provider}. Proceeding to payment details.`
+          };
+        } else {
+          result = {
+            success: false,
+            error: 'Invalid bill or plan selected.'
+          };
+        }
         break;
 
       case 'process_payment':
@@ -119,15 +190,11 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
           transaction_id: `TXN${Date.now()}`,
           amount: parsedArgs.amount,
           bill_id: parsedArgs.bill_id,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          message: `Payment of $${parsedArgs.amount} processed successfully`
         };
 
-        addMessageToHistory({
-          id: Date.now().toString(),
-          text: `Payment of $${parsedArgs.amount} processed successfully`,
-          sender: 'bot',
-          timestamp: new Date()
-        });
+        // Let OpenAI handle the response naturally
         break;
 
       case 'send_receipt':
@@ -135,15 +202,11 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
           success: true,
           method: parsedArgs.method,
           recipient: parsedArgs.recipient,
-          sent_at: new Date().toISOString()
+          sent_at: new Date().toISOString(),
+          message: `Receipt sent via ${parsedArgs.method} to ${parsedArgs.recipient}`
         };
 
-        addMessageToHistory({
-          id: Date.now().toString(),
-          text: `Receipt sent via ${parsedArgs.method} to ${parsedArgs.recipient}`,
-          sender: 'bot',
-          timestamp: new Date()
-        });
+        // Let OpenAI handle the response naturally
         break;
     }
 
@@ -157,20 +220,23 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
       setTranscript(event.transcript || '');
       if (event.transcript) {
         console.log('👤 User voice message:', event.transcript);
-        addMessageToHistory({
-          id: Date.now().toString(),
-          text: event.transcript,
-          sender: 'user',
-          timestamp: new Date()
-        });
+        // Don't add to history here - it will be synced via voiceMessages prop
+        // addMessageToHistory({
+        //   id: Date.now().toString(),
+        //   text: event.transcript,
+        //   sender: 'user',
+        //   timestamp: new Date()
+        // });
       }
     } else if (event.type === 'response.audio_transcript.delta') {
       setTranscript(prev => prev + (event.delta || ''));
     } else if (event.type === 'response.audio_transcript.done') {
       if (event.transcript) {
         console.log('🤖 Bot voice response:', event.transcript);
+        // Create a unique ID based on transcript content and timestamp to help with duplicate detection
+        const messageId = `voice-bot-${Date.now()}-${event.transcript.substring(0, 20).replace(/\s/g, '-')}`;
         addMessageToHistory({
-          id: Date.now().toString(),
+          id: messageId,
           text: event.transcript,
           sender: 'bot',
           timestamp: new Date()
@@ -182,6 +248,12 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
 
   const toggleVoiceMode = useCallback(async () => {
     if (isVoiceMode) {
+      // Clean up event handlers before disconnecting
+      realtimeService.off('function_call', handleFunctionCall);
+      realtimeService.off('conversation.item.input_audio_transcription.completed', handleTranscript);
+      realtimeService.off('response.audio_transcript.delta', handleTranscript);
+      realtimeService.off('response.audio_transcript.done', handleTranscript);
+
       realtimeService.stopRecording();
       realtimeService.disconnect();
       setIsVoiceMode(false);
@@ -192,12 +264,35 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
       try {
         await realtimeService.connect();
 
+        // Register event handlers
         realtimeService.on('function_call', handleFunctionCall);
         realtimeService.on('conversation.item.input_audio_transcription.completed', handleTranscript);
         realtimeService.on('response.audio_transcript.delta', handleTranscript);
         realtimeService.on('response.audio_transcript.done', handleTranscript);
+        realtimeService.on('response.audio.delta', () => {
+          console.log('🔊 Audio delta received in VoiceModeContext');
+        });
+        realtimeService.on('response.audio.done', () => {
+          console.log('✅ Audio response complete in VoiceModeContext');
+        });
 
         setIsVoiceMode(true);
+
+        // Wait for connection to be fully ready before sending events
+        // Check connection state before sending
+        const checkAndSend = () => {
+          if (realtimeService.isReady()) {
+            realtimeService.sendEvent({
+              type: 'response.create'
+            });
+          } else {
+            console.warn('⚠️ Connection not ready, retrying...');
+            setTimeout(checkAndSend, 200);
+          }
+        };
+
+        // Trigger initial response after a short delay to ensure connection is ready
+        setTimeout(checkAndSend, 500);
 
         addMessageToHistory({
           id: Date.now().toString(),
@@ -225,6 +320,20 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
     try {
       await realtimeService.startRecording();
       setIsRecording(true);
+
+      // Wait for connection to be ready before sending events
+      const checkAndSend = () => {
+        if (realtimeService.isReady()) {
+          realtimeService.sendEvent({
+            type: 'response.create'
+          });
+        } else {
+          setTimeout(checkAndSend, 200);
+        }
+      };
+
+      // Trigger a response after starting recording
+      setTimeout(checkAndSend, 300);
     } catch (error) {
       console.error('Failed to start recording:', error);
       addMessageToHistory({
@@ -247,20 +356,9 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
     if (isRecording) {
       stopRecording();
     } else {
-      try {
-        await realtimeService.startRecording();
-        setIsRecording(true);
-      } catch (error) {
-        console.error('Failed to start recording:', error);
-        addMessageToHistory({
-          id: Date.now().toString(),
-          text: 'Could not access microphone. Please check permissions.',
-          sender: 'bot',
-          timestamp: new Date()
-        });
-      }
+      await startRecording();
     }
-  }, [isVoiceMode, isRecording, stopRecording, addMessageToHistory]);
+  }, [isVoiceMode, isRecording, stopRecording, startRecording]);
 
   const sendTextMessage = useCallback((text: string) => {
     if (!isVoiceMode) return;
