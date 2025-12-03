@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Voice AI Pipeline Backend")
 
 # CORS configuration
-origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+origins = os.getenv("CORS_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,

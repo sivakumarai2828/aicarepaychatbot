@@ -64,14 +64,14 @@ export class BackendVoiceService {
           this.cleanup();
         });
 
-        // Timeout after 10 seconds
+        // Timeout after 60 seconds (increased for Render cold starts)
         setTimeout(() => {
           if (!this.isConnected) {
             console.error('❌ WebSocket connection timeout');
             this.ws?.close();
             reject(new Error('WebSocket connection timeout'));
           }
-        }, 10000);
+        }, 60000);
       } catch (error) {
         console.error('❌ Failed to create WebSocket:', error);
         reject(error);
