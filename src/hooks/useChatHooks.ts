@@ -173,28 +173,25 @@ export const useChatHooks = ({
 
       setConversationState(prev => ({
         ...prev,
+        context: 'payment_summary_review',
         paymentFlow: { ...prev.paymentFlow, paymentSummary, selectedBill: bill }
       }));
 
-      // Show payment summary card in chat
+      // Show payment form in background view (not in chat)
+      if (onShowPaymentForm) {
+        console.log('📋 Showing payment form in background view');
+        onShowPaymentForm(paymentSummary);
+      }
+
+      // Only show a brief acknowledgment in chat - details are in the background view
       await addMessages({
         id: Date.now().toString(),
-        text: 'Let me show you the complete payment details for your review:',
+        text: `I've set up your ${planLabel} for ${bill.provider}. The payment details are now displayed on screen.`,
         sender: 'bot',
-        timestamp: new Date(),
-        metadata: {
-          type: 'payment_summary',
-          summary: paymentSummary
-        }
+        timestamp: new Date()
       });
 
-      // Set options for next step
-      setCurrentOptions([
-        { id: 'finalize_payment', label: 'Yes, finalize the payment', action: 'finalize_payment' },
-        { id: 'review_details', label: 'Let me review the details first', action: 'review_details' }
-      ]);
-
-      // We don't call onShowPaymentForm here anymore, we wait for user confirmation
+      // Don't show options here - let the payment form handle the next steps
     }, 1500);
   }, [setIsPlanProcessing, setConversationState, onShowPaymentForm, addMessages, setCurrentOptions]);
 

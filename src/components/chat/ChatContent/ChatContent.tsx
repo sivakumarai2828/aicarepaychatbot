@@ -2,6 +2,7 @@ import React from 'react';
 import { ChatMessage } from '../ChatMessage/ChatMessage';
 import type { Message, Bill, ChatOption, ConversationState } from '../../../types/chat';
 import { BillDisplay } from '../../BillDisplay/BillDisplay';
+import { useVoiceMode } from '../../../contexts/VoiceModeContext';
 
 interface ChatContentProps {
   messages: Message[];
@@ -39,10 +40,23 @@ export const ChatContent: React.FC<ChatContentProps> = ({
   onOptionSelect
 }) => {
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const { toggleVoiceMode, isVoiceMode } = useVoiceMode();
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
+
+  const handleOptionClick = async (optionId: string) => {
+    if (optionId === 'enable_voice') {
+      // Activate voice mode
+      if (!isVoiceMode) {
+        await toggleVoiceMode();
+      }
+    } else {
+      // Handle other options normally
+      onOptionSelect(optionId);
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -68,18 +82,20 @@ export const ChatContent: React.FC<ChatContentProps> = ({
 
       {showOptions && currentOptions.length > 0 && (
         <div className="space-y-2">
-          {currentOptions.map((option) => (
-            <button
-              key={option.id}
-              onClick={() => onOptionSelect(option.id)}
-              className="w-full p-3 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg text-left transition-colors"
-            >
-              <div className="font-medium text-teal-900">{option.label}</div>
-              {option.details && (
-                <div className="text-sm text-teal-700 mt-1">{option.details}</div>
-              )}
-            </button>
-          ))}
+          {currentOptions
+            .filter(option => !(option.id === 'enable_voice' && isVoiceMode))
+            .map((option) => (
+              <button
+                key={option.id}
+                onClick={() => handleOptionClick(option.id)}
+                className="w-full p-3 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg text-left transition-colors"
+              >
+                <div className="font-medium text-teal-900">{option.label}</div>
+                {option.details && (
+                  <div className="text-sm text-teal-700 mt-1">{option.details}</div>
+                )}
+              </button>
+            ))}
         </div>
       )}
 

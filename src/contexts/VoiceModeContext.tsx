@@ -10,7 +10,7 @@ const mockAccounts = [
     firstName: 'Siva',
     lastName: 'Kumar',
     phone: '9166065168',
-    email: 'siva.kumar@example.com',
+    email: 'sivakumar.kk@gmail.com',
     lastFour: '5678'
   },
   {
@@ -18,7 +18,7 @@ const mockAccounts = [
     firstName: 'John',
     lastName: 'Doe',
     phone: '555-0123',
-    email: 'john.doe@example.com',
+    email: 'john.doe@gmail.com',
     lastFour: '9876'
   }
 ];
@@ -68,10 +68,13 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
 
   const handleFunctionCall = useCallback((event: any) => {
     const { call_id, name, arguments: args } = event;
+    console.log(`🔧 Function call received: ${name}`, { call_id, args });
+
     let parsedArgs;
 
     try {
       parsedArgs = JSON.parse(args);
+      console.log(`📋 Parsed arguments for ${name}:`, parsedArgs);
     } catch {
       parsedArgs = {};
     }
@@ -161,41 +164,68 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
 
       case 'select_payment_plan':
         const { bill_id, plan_id } = parsedArgs;
-        // Find the bill and plan to verify
-        const bill = bills.find((b: any) => b.id === bill_id);
-        const plan = bill?.paymentPlans?.find((p: any) => p.id === plan_id);
 
-        if (bill && plan) {
-          // Dispatch event to update UI
+        // Find the bill by ID first, then by provider name (case-insensitive)
+        let selectedBill = bills.find((b: any) => b.id === bill_id);
+
+        if (!selectedBill) {
+          // Try matching by provider name (case-insensitive, partial match)
+          const searchTerm = bill_id?.toLowerCase() || '';
+          selectedBill = bills.find((b: any) =>
+            b.provider.toLowerCase().includes(searchTerm) ||
+            searchTerm.includes(b.provider.toLowerCase())
+          );
+        }
+
+        const plan = selectedBill?.paymentPlans?.find((p: any) => p.id === plan_id);
+
+        if (selectedBill && plan) {
+          // Dispatch event to update UI with the actual bill ID
           if (typeof window !== 'undefined') {
+            console.log('Dispatching planSelected event:', { planId: plan_id, billId: selectedBill.id });
             window.dispatchEvent(new CustomEvent('planSelected', {
-              detail: { planId: plan_id, billId: bill_id }
+              detail: { planId: plan_id, billId: selectedBill.id }
             }));
           }
           result = {
             success: true,
-            message: `Selected ${plan.label} for bill ${bill.provider}. Proceeding to payment details.`
+            message: `Selected ${plan.label} for ${selectedBill.provider}. Proceeding to payment details.`
           };
         } else {
+          const availableBills = bills.map((b: any) => b.provider).join(', ');
+          const availablePlans = selectedBill?.paymentPlans?.map((p: any) => p.id).join(', ') || 'N/A';
           result = {
             success: false,
-            error: 'Invalid bill or plan selected.'
+            error: `Invalid bill or plan. Bill provided: "${bill_id}", Plan: "${plan_id}". Available bills: ${availableBills}. ${selectedBill ? `Available plans for ${selectedBill.provider}: ${availablePlans}` : ''}`
           };
         }
         break;
 
       case 'process_payment':
+        const transactionId = `TXN${Date.now()}`;
         result = {
           success: true,
-          transaction_id: `TXN${Date.now()}`,
+          transaction_id: transactionId,
           amount: parsedArgs.amount,
           bill_id: parsedArgs.bill_id,
+          email: 'sivakumar.kk@gmail.com',
           timestamp: new Date().toISOString(),
           message: `Payment of $${parsedArgs.amount} processed successfully`
         };
 
-        // Let OpenAI handle the response naturally
+        // Dispatch event to update UI (close form, show confirmation)
+        if (typeof window !== 'undefined') {
+          console.log('Dispatching paymentProcessed event');
+          window.dispatchEvent(new CustomEvent('paymentProcessed', {
+            detail: {
+              transactionId,
+              amount: parsedArgs.amount,
+              billId: parsedArgs.bill_id
+            }
+          }));
+        }
         break;
+
 
       case 'send_receipt':
         result = {
@@ -278,21 +308,8 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
 
         setIsVoiceMode(true);
 
-        // Wait for connection to be fully ready before sending events
-        // Check connection state before sending
-        const checkAndSend = () => {
-          if (realtimeService.isReady()) {
-            realtimeService.sendEvent({
-              type: 'response.create'
-            });
-          } else {
-            console.warn('⚠️ Connection not ready, retrying...');
-            setTimeout(checkAndSend, 200);
-          }
-        };
-
-        // Trigger initial response after a short delay to ensure connection is ready
-        setTimeout(checkAndSend, 500);
+        // Don't trigger an automatic response - wait for user to speak first
+        // The system instructions tell the AI to wait for user input
 
         addMessageToHistory({
           id: Date.now().toString(),
@@ -321,19 +338,8 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
       await realtimeService.startRecording();
       setIsRecording(true);
 
-      // Wait for connection to be ready before sending events
-      const checkAndSend = () => {
-        if (realtimeService.isReady()) {
-          realtimeService.sendEvent({
-            type: 'response.create'
-          });
-        } else {
-          setTimeout(checkAndSend, 200);
-        }
-      };
-
-      // Trigger a response after starting recording
-      setTimeout(checkAndSend, 300);
+      // Don't trigger response.create here - let the user speak first
+      // The AI will respond automatically after detecting speech via server VAD
     } catch (error) {
       console.error('Failed to start recording:', error);
       addMessageToHistory({
@@ -388,6 +394,25 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
       type: 'response.create'
     });
   }, [isVoiceMode, addMessageToHistory]);
+
+  // Listen for payment completion from UI button click
+  useEffect(() => {
+    const handlePaymentCompletedByUser = (event: CustomEvent) => {
+      if (isVoiceMode) {
+        const { confirmationNumber, amount, provider } = event.detail;
+        console.log('💳 VoiceMode: Payment completed by user via button', event.detail);
+
+        // Send a message to the AI to inform it about the payment
+        sendTextMessage(`Payment successful! Confirmation number: ${confirmationNumber}. Amount: $${amount} for ${provider}.`);
+      }
+    };
+
+    window.addEventListener('paymentCompletedByUser', handlePaymentCompletedByUser as EventListener);
+
+    return () => {
+      window.removeEventListener('paymentCompletedByUser', handlePaymentCompletedByUser as EventListener);
+    };
+  }, [isVoiceMode, sendTextMessage]);
 
   useEffect(() => {
     return () => {

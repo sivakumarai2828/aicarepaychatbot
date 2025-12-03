@@ -196,7 +196,8 @@ export class BackendVoiceService {
         this.audioQueue.push(audioBuffer);
         // console.log('🎵 Audio chunk queued. Queue length:', this.audioQueue.length); // Debug log
 
-        if (!this.isPlaying) {
+        // Buffer at least 5 chunks before playing to prevent stuttering
+        if (!this.isPlaying && this.audioQueue.length >= 5) {
           this.playNextAudio();
         }
       } catch (error) {
@@ -204,6 +205,13 @@ export class BackendVoiceService {
       }
 
       // Still emit the event for UI visualization
+      this.emit(data.type, data);
+      this.emit('*', data);
+    } else if (data.type === 'response.audio.done') {
+      // Flush any remaining audio in the queue
+      if (!this.isPlaying && this.audioQueue.length > 0) {
+        this.playNextAudio();
+      }
       this.emit(data.type, data);
       this.emit('*', data);
     } else if (data.type === 'function_call') {
@@ -247,17 +255,8 @@ export class BackendVoiceService {
       const source = this.audioContext.createMediaStreamSource(this.mediaStream);
       const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
 
-      let lastSendTime = 0;
-      const minSendInterval = 50; // Send at most every 50ms
-
       processor.onaudioprocess = (e) => {
         if (!this.isConnected || !this.ws) return;
-
-        const now = Date.now();
-        if (now - lastSendTime < minSendInterval) {
-          return;
-        }
-        lastSendTime = now;
 
         const inputData = e.inputBuffer.getChannelData(0);
         const pcm16 = new Int16Array(inputData.length);

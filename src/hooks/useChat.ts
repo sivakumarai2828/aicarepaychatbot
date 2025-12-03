@@ -18,7 +18,7 @@ export const useChat = () => {
       const existingContentKeys = new Set(
         prev.map(m => `${m.sender}:${m.text.substring(0, 100)}`)
       );
-      
+
       const uniqueMessages = messagesToAdd.filter(msg => {
         const contentKey = `${msg.sender}:${msg.text.substring(0, 100)}`;
         const isDuplicate = existingIds.has(msg.id) || existingContentKeys.has(contentKey);
@@ -27,11 +27,11 @@ export const useChat = () => {
         }
         return !isDuplicate;
       });
-      
+
       if (uniqueMessages.length < messagesToAdd.length) {
         console.log('⚠️ Filtered out', messagesToAdd.length - uniqueMessages.length, 'duplicate messages');
       }
-      
+
       return [...prev, ...uniqueMessages];
     });
   }, []);
@@ -45,9 +45,7 @@ export const useChat = () => {
     };
     setMessages([welcomeMessage]);
     setCurrentOptions([
-      { id: 'lookup_account', label: 'Look up my account', action: 'lookup_account' },
-      { id: 'view_bills', label: 'View my bills', action: 'view_bills' },
-      { id: 'make_payment', label: 'Make a payment', action: 'make_payment' }
+      { id: 'enable_voice', label: '🎤 Enable Voice Assistance', action: 'enable_voice' }
     ]);
     setConversationState({ context: 'initial' });
   }, []);

@@ -2,7 +2,7 @@ import { config } from '../../config/env';
 import type { RealtimeEvent, RealtimeSessionConfig, RealtimeTool } from '../../types/openai';
 import { BackendVoiceService } from '../backend/voiceService';
 
-const OPENAI_REALTIME_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
+const OPENAI_REALTIME_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview';
 
 export class OpenAIRealtimeService {
   private ws: WebSocket | null = null;

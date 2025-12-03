@@ -44,7 +44,7 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 if openai_api_key:
     openai_client = OpenAI(api_key=openai_api_key)
 
-OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
+OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
 
 
 # ============================================================================
@@ -60,7 +60,7 @@ class VoiceSessionConfig(BaseModel):
         description="Controls randomness: 0.0=deterministic, 2.0=very creative"
     )
     max_response_output_tokens: Optional[int] = Field(
-        default=250, 
+        default=1000, 
         ge=1, 
         le=4096,
         description="Maximum tokens in response (lower = faster, more concise for voice)"
@@ -129,12 +129,20 @@ def get_system_instructions() -> str:
 - Send receipts via email or SMS
 
 CRITICAL INTERACTION RULES:
-1. WAIT for the user to speak first and tell you what they need.
-2. IF the user says "Hello", "Hi", or greets you: Just say "Hello! How can I help you today?" DO NOT ask for account details yet.
+1. WAIT for the user to speak first and tell you what they need. DO NOT greet them or say anything when voice mode first starts.
+2. When the user first speaks, IF they say "Hello", "Hi", or greet you: Just say "Hello! How can I help you today?" DO NOT ask for account details yet.
 3. DO NOT proactively ask for phone numbers, emails, or offer to look up accounts until the user mentions a task that requires it (like "view bills").
-4. DO NOT assume what the user wants - let them tell you.
-5. Only call functions when the user explicitly requests that action.
-6. Be responsive and helpful, but not pushy.
+4. If you hear silence, background noise, or unclear speech, DO NOT respond. Wait for clear instructions.
+5. DO NOT assume what the user wants - let them tell you.
+6. Only call functions when the user explicitly requests that action.
+
+CRITICAL RULES FOR ACCOUNT LOOKUP:
+1. If the user asks to "view bills", "check balance", or "see account", you MUST identify them first.
+2. Ask: "I can help with that. What is your phone number or email address?"
+3. WAIT for the user to provide the phone number or email.
+4. Once provided, call `lookup_account` with the identifier.
+5. ONLY after `lookup_account` returns successfully, call `get_bills` with the returned account_id.
+6. NEVER call `get_bills` with a made-up ID like "sample_account_id" or "12345". You MUST have a real ID from the user or lookup.
 
 CRITICAL RULES FOR BILL DISPLAY:
 When you call the get_bills function:
@@ -146,11 +154,13 @@ When you call the get_bills function:
 
 CRITICAL RULES FOR PAYMENT PLANS:
 When you call the show_payment_plans function:
-1. DO NOT describe the payment plan options (6-month, 12-month, 18-month, etc.)
-2. DO NOT mention monthly payment amounts or interest rates
-3. The payment plans appear INSTANTLY in the visual UI
-4. Simply say: "I've displayed the payment plan options for your [bill name]"
-5. Then ask which plan they'd like to choose
+1. Call this if the user asks for "dental plan", "installment plan", "payment options", or similar.
+2. If the user mentions a specific bill type (e.g., "dental"), use that as the bill_id (e.g., "Dental Care").
+3. DO NOT describe the payment plan options (6-month, 12-month, 18-month, etc.)
+4. DO NOT mention monthly payment amounts or interest rates
+5. The payment plans appear INSTANTLY in the visual UI
+6. Simply say: "I've displayed the payment plan options for your [bill name]"
+7. Then ask which plan they'd like to choose
 
 CRITICAL RULES FOR SELECTING PAYMENT PLANS:
 When user chooses a payment plan (e.g., "6-month plan", "12-month", "first installment"):
@@ -161,7 +171,26 @@ When user chooses a payment plan (e.g., "6-month plan", "12-month", "first insta
 5. DO NOT describe payment amounts or details - they appear in the visual UI
 
 Be conversational, friendly, and efficient. When handling payments, confirm amounts and important details.
-Use the provided functions to perform actions. Always acknowledge what you're doing."""
+Use the provided functions to perform actions. Always acknowledge what you're doing.
+Speak in full, complete sentences. Do not break up your response unnecessarily.
+
+CRITICAL RULE FOR PAYMENT PLANS:
+When you call select_payment_plan:
+1. Say: "I've set up your payment plan. Please enter your payment details on the screen to finalize it."
+2. STOP TALKING. Do not ask "Is there anything else?"
+3. WAIT for the user to either:
+   - Say they are done (then you confirm success)
+   - Ask for help
+   - Or for the system to trigger a success event
+4. DO NOT assume the payment is complete until you receive a confirmation or the user tells you.
+
+CRITICAL POST-PAYMENT RULE:
+After a payment is successfully processed (you called process_payment):
+1. Confirm the success: "Payment successful!"
+2. IMMEDIATELY offer to send the receipt to the registered email: "Would you like me to send the receipt to your registered email, sivakumar.kk@gmail.com?"
+3. DO NOT ask for the email address - assume you have it.
+4. DO NOT ask for the transaction ID - you just generated it.
+5. If they say yes, call send_receipt immediately."""
 
 
 
@@ -171,7 +200,7 @@ def get_tools() -> list:
         {
             "type": "function",
             "name": "lookup_account",
-            "description": "Look up customer account by phone number or email. ONLY call this if the user explicitly asks to 'look up my account', 'find my account', or if they provide their email/phone number for identification. DO NOT ask for this information proactively upon greeting.",
+            "description": "Look up customer account by phone number or email. Call this when the user provides their contact info to view bills or access their account.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -186,13 +215,13 @@ def get_tools() -> list:
         {
             "type": "function",
             "name": "get_bills",
-            "description": "Get list of bills for an account. ONLY call this function when the user EXPLICITLY asks to see their bills, view bills, show bills, or check their bills. DO NOT call this function proactively or as a greeting.",
+            "description": "Get list of bills for an account. REQUIRED: You MUST have a valid account_id from a previous `lookup_account` call. DO NOT call this with a made-up ID. If you don't have an account_id, ask the user for their phone/email first.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "account_id": {
                         "type": "string",
-                        "description": "Account identifier"
+                        "description": "Account identifier obtained from lookup_account"
                     }
                 },
                 "required": ["account_id"]

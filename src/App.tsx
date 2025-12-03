@@ -3,7 +3,7 @@ import { VoiceModeProvider } from './contexts/VoiceModeContext';
 import { PaymentConfirmation } from './components/PaymentConfirmation/PaymentConfirmation';
 import { SecurePaymentForm } from './components/SecurePaymentForm/SecurePaymentForm';
 import { WelcomeView, BillsView, PaymentPlansView } from './components/views';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { PaymentSummary } from './types/interfaces';
 import type { Message } from './types/chat';
 import type { ViewState } from './types/viewState';
@@ -100,18 +100,45 @@ function App() {
   }, []);
 
   const handlePaymentComplete = useCallback(() => {
-    console.log('🎯 App: Payment completed - checking for chatbot callback');
+    console.log('🎯 App: Payment completed');
 
-    // The chatbot should handle this through the global callback
-    // This is just a fallback in case the global callback isn't set
-    if (!window.paymentFormCompletionCallback) {
-      console.log('⚠️ App: No global completion callback found - using fallback');
-      // Fallback behavior - just close the form
-      setShowPaymentForm(false);
-      setPaymentFormData(null);
-      setCurrentView('success');
+    // Always handle the payment completion logic here
+    // We don't need to check for the callback because this function IS the handler
+
+    // Create a mock confirmation if one doesn't exist yet
+    const summary = paymentFormData?.paymentSummary || {
+      balance: 0,
+      planType: 'unknown',
+      monthlyPayment: 0,
+      totalMonths: 0,
+      firstPaymentDate: new Date().toISOString(),
+      provider: 'Unknown'
+    };
+
+    const confirmation = {
+      confirmationNumber: `CN-${Date.now().toString().slice(-6)}`,
+      paymentSummary: summary,
+      email: 'sivakumar.kk@gmail.com'
+    };
+
+    setConfirmationData(confirmation);
+    setShowPaymentForm(false);
+    setPaymentFormData(null);
+    setShowConfirmation(true);
+    setCurrentView('confirmation');
+
+    // Notify the AI about the payment completion
+    if (typeof window !== 'undefined') {
+      console.log('📢 Dispatching paymentCompletedByUser event');
+      window.dispatchEvent(new CustomEvent('paymentCompletedByUser', {
+        detail: {
+          confirmationNumber: confirmation.confirmationNumber,
+          amount: summary.balance,
+          provider: summary.provider
+        }
+      }));
     }
-  }, []);
+  }, [paymentFormData]);
 
   const handleClose = useCallback(() => {
     setShowConfirmation(false);
@@ -126,6 +153,20 @@ function App() {
       setSelectedBill(data.bill);
     }
   }, []);
+
+  // Listen for payment processed events from VoiceModeContext
+  useEffect(() => {
+    const handlePaymentProcessed = (event: CustomEvent) => {
+      console.log('💳 App: Payment processed event received', event.detail);
+      handlePaymentComplete();
+    };
+
+    window.addEventListener('paymentProcessed', handlePaymentProcessed as EventListener);
+
+    return () => {
+      window.removeEventListener('paymentProcessed', handlePaymentProcessed as EventListener);
+    };
+  }, [handlePaymentComplete]);
 
   // Render the appropriate view based on current state
   const renderMainContent = () => {
