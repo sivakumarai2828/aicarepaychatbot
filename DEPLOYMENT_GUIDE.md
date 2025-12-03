@@ -70,10 +70,10 @@ Render should auto-detect settings from `render.yaml`, but verify:
 - **Name**: `aicarepaychatbot-backend`
 - **Region**: Oregon (or closest to you)
 - **Branch**: `main`
-- **Root Directory**: Leave empty (we use `cd backend` in commands)
+- **Root Directory**: `backend`
 - **Environment**: `Python 3`
-- **Build Command**: `cd backend && pip install -r requirements.txt`
-- **Start Command**: `cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT`
+- **Build Command**: `pip install -r requirements.txt`
+- **Start Command**: `uvicorn app:app --host 0.0.0.0 --port $PORT`
 
 ### Step 3: Set Environment Variables
 
