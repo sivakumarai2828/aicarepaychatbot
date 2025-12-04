@@ -18,6 +18,9 @@ from fastapi.responses import JSONResponse
 import uvicorn
 import websockets
 from openai import OpenAI
+import resend
+from datetime import datetime
+from email_templates import get_receipt_html
 
 # Load environment variables
 load_dotenv()
@@ -43,6 +46,13 @@ openai_client = None
 openai_api_key = os.getenv("OPENAI_API_KEY")
 if openai_api_key:
     openai_client = OpenAI(api_key=openai_api_key)
+
+# Resend configuration
+resend_api_key = os.getenv("RESEND_API_KEY")
+if resend_api_key:
+    resend.api_key = resend_api_key
+else:
+    logger.warning("RESEND_API_KEY not found in environment variables")
 
 OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
 
@@ -154,13 +164,14 @@ When you call the get_bills function:
 
 CRITICAL RULES FOR PAYMENT PLANS:
 When you call the show_payment_plans function:
-1. Call this if the user asks for "dental plan", "installment plan", "payment options", or similar.
-2. If the user mentions a specific bill type (e.g., "dental"), use that as the bill_id (e.g., "Dental Care").
-3. DO NOT describe the payment plan options (6-month, 12-month, 18-month, etc.)
-4. DO NOT mention monthly payment amounts or interest rates
-5. The payment plans appear INSTANTLY in the visual UI
-6. Simply say: "I've displayed the payment plan options for your [bill name]"
-7. Then ask which plan they'd like to choose
+1. ONLY call this if the user EXPLICITLY asks for "dental plan", "installment plan", "payment options", or similar.
+2. DO NOT call this if the user just says "pay bill" or "make a payment" - assume they want to pay in full unless they say otherwise.
+3. If the user mentions a specific bill type (e.g., "dental"), use that as the bill_id (e.g., "Dental Care").
+4. DO NOT describe the payment plan options (6-month, 12-month, 18-month, etc.)
+5. DO NOT mention monthly payment amounts or interest rates
+6. The payment plans appear INSTANTLY in the visual UI
+7. Simply say: "I've displayed the payment plan options for your [bill name]"
+8. Then ask which plan they'd like to choose
 
 CRITICAL RULES FOR SELECTING PAYMENT PLANS:
 When user chooses a payment plan (e.g., "6-month plan", "12-month", "first installment"):
@@ -177,20 +188,23 @@ Speak in full, complete sentences. Do not break up your response unnecessarily.
 CRITICAL RULE FOR PAYMENT PLANS:
 When you call select_payment_plan:
 1. Say: "I've set up your payment plan. Please enter your payment details on the screen to finalize it."
-2. STOP TALKING. Do not ask "Is there anything else?"
-3. WAIT for the user to either:
-   - Say they are done (then you confirm success)
+2. STOP TALKING. Do not say "payment successful" or ask about sending receipts.
+3. WAIT SILENTLY for the user to either:
+   - Say they completed the payment (then you can confirm)
    - Ask for help
-   - Or for the system to trigger a success event
-4. DO NOT assume the payment is complete until you receive a confirmation or the user tells you.
+   - Or wait for the system to send you a payment completion notification
+4. DO NOT assume the payment is complete just because you called select_payment_plan.
+5. The payment form is displayed on screen - the user needs to fill it out and click "Pay Now" first.
 
 CRITICAL POST-PAYMENT RULE:
-After a payment is successfully processed (you called process_payment):
+ONLY after you receive explicit confirmation that payment was processed (via process_payment function call OR user tells you):
 1. Confirm the success: "Payment successful!"
-2. IMMEDIATELY offer to send the receipt to the registered email: "Would you like me to send the receipt to your registered email, sivakumar.kk@gmail.com?"
-3. DO NOT ask for the email address - assume you have it.
-4. DO NOT ask for the transaction ID - you just generated it.
-5. If they say yes, call send_receipt immediately."""
+2. IMMEDIATELY offer to send the receipt: "Would you like me to send the receipt to your registered email?"
+3. If they say yes, ask: "Which email should I use? sivakumar.kk@gmail.com or sivakumar.kondapalle@syf.com?"
+4. WAIT for their selection.
+5. Once they confirm, call send_email with the selected address.
+
+IMPORTANT: Do NOT say "payment successful" until the user actually completes the payment by clicking "Pay Now" on the form."""
 
 
 
@@ -288,6 +302,29 @@ def get_tools() -> list:
                     }
                 },
                 "required": ["bill_id"]
+            }
+        },
+        {
+            "type": "function",
+            "name": "send_email",
+            "description": "Send an email using Resend API. Call this when the user wants to send a receipt or information via email.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "Recipient email address (e.g., sivakumar.kk@gmail.com)"
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Email subject"
+                    },
+                    "html": {
+                        "type": "string",
+                        "description": "Email body content (HTML supported)"
+                    }
+                },
+                "required": ["to", "subject", "html"]
             }
         },
         {
@@ -485,18 +522,113 @@ async def proxy_openai_realtime(client_ws: WebSocket, session_id: str, voice_con
                             # Forward all messages to client
                             await client_ws.send_text(message)
                             
-                            # Handle function calls - transform to frontend format
+                            # Handle function calls
                             if data.get("type") == "response.function_call_arguments.done":
-                                logger.info(f"🔧 Function call detected: {data.get('name')}")
-                                # Send transformed function_call event to frontend
-                                function_call_event = {
-                                    "type": "function_call",
-                                    "call_id": data.get("call_id"),
-                                    "name": data.get("name"),
-                                    "arguments": data.get("arguments", "{}")
-                                }
-                                await client_ws.send_text(json.dumps(function_call_event))
-                                logger.info(f"📤 Sent function_call event to frontend: {data.get('name')}")
+                                function_name = data.get("name")
+                                call_id = data.get("call_id")
+                                arguments_str = data.get("arguments", "{}")
+                                logger.info(f"🔧 Function call detected: {function_name}")
+                                
+                                if function_name == "send_email":
+                                    # Handle email sending locally in backend
+                                    try:
+                                        args = json.loads(arguments_str)
+                                        to_email = args.get("to")
+                                        subject = args.get("subject")
+                                        html_content = args.get("html")
+                                        
+                                        logger.info(f"📧 Sending email to {to_email}...")
+                                        
+                                        # Send email using Resend
+                                        if resend.api_key:
+                                            email_params = {
+                                                "from": "CareCredit Support <onboarding@resend.dev>",
+                                                "to": [to_email],
+                                                "subject": subject,
+                                                "html": html_content
+                                            }
+                                            email_response = resend.Emails.send(email_params)
+                                            logger.info(f"✅ Email sent: {email_response}")
+                                            output_result = "Email sent successfully."
+                                        else:
+                                            logger.error("❌ Resend API key not configured")
+                                            output_result = "Error: Email service not configured."
+                                            
+                                    except Exception as e:
+                                        logger.error(f"❌ Error sending email: {e}")
+                                        output_result = f"Error sending email: {str(e)}"
+                                    
+                                    # Send output back to OpenAI
+                                    function_output_event = {
+                                        "type": "conversation.item.create",
+                                        "item": {
+                                            "type": "function_call_output",
+                                            "call_id": call_id,
+                                            "output": output_result
+                                        }
+                                    }
+                                    await openai_ws.send(json.dumps(function_output_event))
+                                    
+                                    # Trigger response
+                                    await openai_ws.send(json.dumps({"type": "response.create"}))
+
+                                elif function_name == "send_receipt":
+                                    # Handle receipt sending
+                                    try:
+                                        args = json.loads(arguments_str)
+                                        method = args.get("method")
+                                        recipient = args.get("recipient")
+                                        transaction_id = args.get("transaction_id")
+                                        
+                                        if method == "email":
+                                            logger.info(f"📧 Sending receipt to {recipient}...")
+                                            
+                                            # Generate HTML content
+                                            amount = "150.00" # Default/Mock amount since it's not passed in send_receipt
+                                            date_str = datetime.now().strftime("%B %d, %Y")
+                                            html_content = get_receipt_html(transaction_id, amount, date_str, "Credit Card")
+                                            
+                                            if resend.api_key:
+                                                email_params = {
+                                                    "from": "CareCredit Support <onboarding@resend.dev>",
+                                                    "to": [recipient],
+                                                    "subject": f"Payment Receipt - {transaction_id}",
+                                                    "html": html_content
+                                                }
+                                                email_response = resend.Emails.send(email_params)
+                                                logger.info(f"✅ Receipt sent: {email_response}")
+                                                output_result = "Receipt sent successfully."
+                                            else:
+                                                output_result = "Error: Email service not configured."
+                                        else:
+                                            output_result = "SMS not supported yet."
+                                            
+                                    except Exception as e:
+                                        logger.error(f"❌ Error sending receipt: {e}")
+                                        output_result = f"Error sending receipt: {str(e)}"
+
+                                    # Send output back to OpenAI
+                                    function_output_event = {
+                                        "type": "conversation.item.create",
+                                        "item": {
+                                            "type": "function_call_output",
+                                            "call_id": call_id,
+                                            "output": output_result
+                                        }
+                                    }
+                                    await openai_ws.send(json.dumps(function_output_event))
+                                    await openai_ws.send(json.dumps({"type": "response.create"}))
+
+                                else:
+                                    # Forward other function calls to frontend
+                                    function_call_event = {
+                                        "type": "function_call",
+                                        "call_id": call_id,
+                                        "name": function_name,
+                                        "arguments": arguments_str
+                                    }
+                                    await client_ws.send_text(json.dumps(function_call_event))
+                                    logger.info(f"📤 Sent function_call event to frontend: {function_name}")
                             
                             # Log important events
                             if data.get("type") == "response.audio.delta":

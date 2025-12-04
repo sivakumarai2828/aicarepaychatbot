@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChatMessage } from '../ChatMessage/ChatMessage';
 import type { Message, Bill, ChatOption, ConversationState } from '../../../types/chat';
-import { BillDisplay } from '../../BillDisplay/BillDisplay';
+
 import { useVoiceMode } from '../../../contexts/VoiceModeContext';
 
 interface ChatContentProps {
@@ -32,11 +32,8 @@ export const ChatContent: React.FC<ChatContentProps> = ({
   isProcessing,
   isAccountProcessing,
   isPlanProcessing,
-  showBills,
   showOptions,
   currentOptions,
-  bills,
-  onBillSelect,
   onOptionSelect
 }) => {
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
@@ -68,17 +65,7 @@ export const ChatContent: React.FC<ChatContentProps> = ({
         />
       ))}
 
-      {showBills && (
-        <div className="space-y-3">
-          {bills.map((bill) => (
-            <BillDisplay
-              key={bill.id}
-              bill={bill}
-              onSelectPayment={(billId) => onBillSelect(billId)}
-            />
-          ))}
-        </div>
-      )}
+      {/* Bills are displayed in the main view, not in chat */}
 
       {showOptions && currentOptions.length > 0 && (
         <div className="space-y-2">

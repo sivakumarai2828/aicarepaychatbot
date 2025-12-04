@@ -17,3 +17,6 @@ openai>=1.0.0
 
 # Cartesia SDK (for TTS)
 # cartesia
+
+# Email
+resend>=0.1.0

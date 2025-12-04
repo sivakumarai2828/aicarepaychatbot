@@ -75,11 +75,13 @@ function App() {
       setConfirmationData(data);
       setShowConfirmation(true);
       setShowPaymentForm(false);
+      setPaymentFormData(null); // Clear payment form data
       setCurrentView('confirmation');
     } else {
       setConfirmationData(null);
       setShowConfirmation(false);
       setShowPaymentForm(false);
+      setPaymentFormData(null); // Clear payment form data
       setCurrentView('welcome');
     }
   }, []);

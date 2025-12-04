@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Message } from '../../../types/interfaces';
 import { BotAvatar } from '../../BotAvatar/BotAvatar';
-import { BillDisplay } from '../../BillDisplay/BillDisplay';
+
 import { PaymentPlanSelector } from '../PaymentPlanSelector/PaymentPlanSelector';
 import { PaymentDetailsCard } from '../PaymentDetailsCard/PaymentDetailsCard';
 
@@ -25,7 +25,6 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     }
   }, [isLatest, message.id, onMessageDisplay]);
 
-  const hasBillSelection = message.metadata?.type === 'bill_selection' && message.metadata?.bills;
   const hasPlanSelection = message.metadata?.type === 'plan_selection' && message.metadata?.plans;
   const hasPaymentSummary = message.metadata?.type === 'payment_summary' && message.metadata?.summary;
 
@@ -42,22 +41,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       >
         <p className="break-words whitespace-pre-wrap">{message.text}</p>
 
-        {hasBillSelection && (
-          <div className="mt-4 space-y-2">
-            {message.metadata!.bills!.map((bill: any) => (
-              <BillDisplay
-                key={bill.id}
-                bill={bill}
-                onSelectPayment={(billId, option) => {
-                  console.log('Bill payment selected from voice mode:', billId, option);
-                  window.dispatchEvent(new CustomEvent('billPaymentSelected', {
-                    detail: { billId, option }
-                  }));
-                }}
-              />
-            ))}
-          </div>
-        )}
+        {/* Bills are displayed in the main view, not in chat */}
 
         {hasPlanSelection && (
           <div className="mt-4">

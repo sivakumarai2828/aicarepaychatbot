@@ -189,7 +189,7 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
           }
           result = {
             success: true,
-            message: `Selected ${plan.label} for ${selectedBill.provider}. Proceeding to payment details.`
+            message: `Payment plan selected: ${plan.label} for ${selectedBill.provider}. Payment form is now displayed on screen. Waiting for user to enter payment details and click "Pay Now".`
           };
         } else {
           const availableBills = bills.map((b: any) => b.provider).join(', ');
