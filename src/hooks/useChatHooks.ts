@@ -178,10 +178,10 @@ export const useChatHooks = ({
       }));
 
       // Show payment form in background view (not in chat)
-      if (onShowPaymentForm) {
-        console.log('📋 Showing payment form in background view');
-        onShowPaymentForm(paymentSummary);
-      }
+      // if (onShowPaymentForm) {
+      //   console.log('📋 Showing payment form in background view');
+      //   onShowPaymentForm(paymentSummary);
+      // }
 
       // Only show a brief acknowledgment in chat - details are in the background view
       await addMessages({
@@ -192,6 +192,13 @@ export const useChatHooks = ({
       });
 
       // Don't show options here - let the payment form handle the next steps
+      // Dispatch event to show payment options view
+      // REMOVED to prevent infinite loop: The event is already dispatched by VoiceModeContext or handled by App logic
+      /* 
+      if (typeof window !== 'undefined') {
+        // ...
+      }
+      */
     }, 1500);
   }, [setIsPlanProcessing, setConversationState, onShowPaymentForm, addMessages, setCurrentOptions]);
 

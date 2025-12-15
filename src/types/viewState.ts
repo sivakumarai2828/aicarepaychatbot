@@ -2,6 +2,8 @@ export type ViewState =
     | 'welcome'
     | 'bills'
     | 'payment-plans'
+    | 'payment-options'
+    | 'account-lookup'
     | 'payment-form'
     | 'confirmation'
     | 'success';

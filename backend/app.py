@@ -137,6 +137,7 @@ def get_system_instructions() -> str:
 - View their bills
 - Make payments
 - Send receipts via email or SMS
+- Apply for a new CareCredit card
 
 CRITICAL INTERACTION RULES:
 1. WAIT for the user to speak first and tell you what they need. DO NOT greet them or say anything when voice mode first starts.
@@ -199,12 +200,27 @@ When you call select_payment_plan:
 CRITICAL POST-PAYMENT RULE:
 ONLY after you receive explicit confirmation that payment was processed (via process_payment function call OR user tells you):
 1. Confirm the success: "Payment successful!"
-2. IMMEDIATELY offer to send the receipt: "Would you like me to send the receipt to your registered email?"
-3. If they say yes, ask: "Which email should I use? sivakumar.kk@gmail.com or sivakumar.kondapalle@syf.com?"
-4. WAIT for their selection.
-5. Once they confirm, call send_email with the selected address.
+2. IMMEDIATELY ask: "Would you like me to send a receipt to your email?"
+3. If they say "yes" (or "sure", "please"):
+   - Call the `send_receipt` function.
+   - After sending, ask: "Would you like to make another payment?"
+4. If they say "yes" (to another payment):
+   - Say: "Okay, here are your remaining bills."
+   - CALL `get_bills` function immediately. Use the `account_id` from the previous lookup (e.g., "acc_1").
+5. If they say "no":
+   - Ask: "Is there anything else I can help you with?"
 
-IMPORTANT: Do NOT say "payment successful" until the user actually completes the payment by clicking "Pay Now" on the form."""
+IMPORTANT: Do NOT say "payment successful" until the user actually completes the payment by clicking "Pay Now" on the form.
+
+CRITICAL RULE FOR "CARECREDIT CARD" OR "PAYMENT OPTIONS":
+1. When the user asks to "Pay with CareCredit card" or selects "CareCredit card" option:
+2. Call `select_payment_option(option='carecredit-card')`.
+3. Say: "I've opened the secure payment form. Please enter your card details on the screen."
+4. STOP TALKING. Do NOT say "payment successful". Do NOT say "it's processed".
+5. Wait for the user to fill the form.
+6. The payment is ONLY complete if the user clicks "Pay Now" or explicitly tells you "I have paid".
+
+CRITICAL: If the user provides a "Confirmation number" or says they completed the payment successfully, ACCEPT this as the confirmation. AUTOMATICALLY ask: "Payment successful! Would you like me to send a receipt to your email?" """
 
 
 
@@ -344,6 +360,47 @@ def get_tools() -> list:
                     }
                 },
                 "required": ["bill_id", "plan_id"]
+            }
+        },
+        {
+            "type": "function",
+            "name": "apply_for_card",
+            "description": "Apply for a new CareCredit card. Call this when the user explicitly asks to apply for a new card or mentions they want to get a CareCredit card.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "type": "function",
+            "name": "select_payment_option",
+            "description": "Select a payment method from the available options (Account Lookup, CareCredit Card, Apply for Card). Call this when the user is on the 'Payment Options' screen and asks to use a specific method.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "option": {
+                        "type": "string",
+                        "description": "The selected option",
+                        "enum": ["account-lookup", "carecredit-card", "apply-new"]
+                    }
+                },
+                "required": ["option"]
+            }
+        },
+        {
+            "type": "function",
+            "name": "select_account",
+            "description": "Select a specific account for payment from the available options. Call this when the user mentions an account (e.g., 'primary method', 'ending in 5678') on the Account Lookup screen.",
+             "parameters": {
+                "type": "object",
+                "properties": {
+                    "account_identifier": {
+                        "type": "string",
+                        "description": "The identifier of the account (e.g., last 4 digits '5678', or 'primary')"
+                    }
+                },
+                "required": ["account_identifier"]
             }
         }
     ]

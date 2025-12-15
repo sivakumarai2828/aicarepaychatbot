@@ -324,6 +324,7 @@ Use the provided functions to perform actions. Always acknowledge what you're do
           break;
         case 'input_audio_buffer.speech_started':
           console.log('🎙️ OpenAI VAD: Speech started (server detected user speaking)');
+          this.stopAudioPlayback();
           break;
         case 'input_audio_buffer.speech_stopped':
           console.log('🔇 OpenAI VAD: Speech stopped (server detected user stopped speaking)');

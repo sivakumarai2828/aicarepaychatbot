@@ -11,6 +11,7 @@ interface PaymentConfirmationProps {
 export const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
   confirmationNumber,
   paymentSummary,
+  email,
   onClose
 }) => {
   return (
@@ -39,6 +40,12 @@ export const PaymentConfirmation: React.FC<PaymentConfirmationProps> = ({
             <span className="text-gray-600">Amount:</span>
             <span className="font-semibold text-gray-900">${paymentSummary.balance.toFixed(2)}</span>
           </div>
+          {email && (
+            <div className="flex justify-between mt-4 pt-4 border-t border-gray-100">
+              <span className="text-gray-600 block mb-1">Receipt sent to:</span>
+              <span className="font-semibold text-gray-900 block">{email}</span>
+            </div>
+          )}
 
         </div>
 

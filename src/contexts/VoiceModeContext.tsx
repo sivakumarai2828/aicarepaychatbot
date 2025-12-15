@@ -47,18 +47,28 @@ export const useVoiceMode = () => {
 interface VoiceModeProviderProps {
   children: React.ReactNode;
   onMessage?: (message: Message) => void;
+  onPaymentOptionSelect?: (option: string) => void;
 }
 
-export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, onMessage }) => {
+export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, onMessage, onPaymentOptionSelect }) => {
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const messageCallbackRef = useRef(onMessage);
+  const currentResponseId = useRef<string>('');
+  const interruptedResponseIds = useRef<Set<string>>(new Set());
+  const latestTranscriptRef = useRef('');
 
   useEffect(() => {
     messageCallbackRef.current = onMessage;
   }, [onMessage]);
+
+  const paymentOptionCallbackRef = useRef(onPaymentOptionSelect);
+
+  useEffect(() => {
+    paymentOptionCallbackRef.current = onPaymentOptionSelect;
+  }, [onPaymentOptionSelect]);
 
   const addMessageToHistory = useCallback((message: Message) => {
     if (messageCallbackRef.current) {
@@ -84,20 +94,41 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
     switch (name) {
       case 'lookup_account':
         const identifier = parsedArgs.identifier || '';
-        const normalizedIdentifier = identifier.replace(/\D/g, '');
+        // Normalize identifier: remove non-digits
+        // If it starts with '1' and is 11 digits, remove the '1'
+        let normalizedIdentifier = identifier.replace(/\D/g, '');
+        if (normalizedIdentifier.length === 11 && normalizedIdentifier.startsWith('1')) {
+          normalizedIdentifier = normalizedIdentifier.substring(1);
+        }
+
+        console.log(`🔍 Lookup Account: "${identifier}" -> "${normalizedIdentifier}"`);
 
         const account = mockAccounts.find((acc: any) => {
-          const normalizedPhone = acc.phone.replace(/\D/g, '');
-          return normalizedPhone === normalizedIdentifier ||
+          if (!acc.phone) return false;
+
+          let normalizedPhone = acc.phone.replace(/\D/g, '');
+          if (normalizedPhone.length === 11 && normalizedPhone.startsWith('1')) {
+            normalizedPhone = normalizedPhone.substring(1);
+          }
+
+          console.log(`Checking against: ${acc.phone} -> ${normalizedPhone}`);
+
+          const phoneMatch = normalizedPhone === normalizedIdentifier;
+          // Also try checking if one contains the other if lengths differ significantly (unlikely but safe)
+          // or exact match 10 digits
+
+          return phoneMatch ||
             acc.email?.toLowerCase() === identifier.toLowerCase() ||
             (parsedArgs.firstName && parsedArgs.lastName &&
               acc.firstName?.toLowerCase() === parsedArgs.firstName.toLowerCase() &&
               acc.lastName?.toLowerCase() === parsedArgs.lastName.toLowerCase());
         });
 
+        console.log('✅ Account found:', account ? account.id : 'No');
+
         result = account
           ? { success: true, account }
-          : { success: false, error: 'Account not found' };
+          : { success: false, error: 'Account not found. Please try providing your email address.' };
         break;
 
       case 'get_bills':
@@ -115,7 +146,6 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
         // Let OpenAI handle the response naturally - don't add message here
         // This prevents duplicate responses
         break;
-
 
 
       case 'show_payment_plans':
@@ -182,9 +212,10 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
         if (selectedBill && plan) {
           // Dispatch event to update UI with the actual bill ID
           if (typeof window !== 'undefined') {
-            console.log('Dispatching planSelected event:', { planId: plan_id, billId: selectedBill.id });
+            const planObject = { ...plan, billId: selectedBill.id }; // Attach billId just in case
+            console.log('Dispatching planSelected event:', planObject);
             window.dispatchEvent(new CustomEvent('planSelected', {
-              detail: { planId: plan_id, billId: selectedBill.id }
+              detail: planObject
             }));
           }
           result = {
@@ -199,6 +230,97 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
             error: `Invalid bill or plan. Bill provided: "${bill_id}", Plan: "${plan_id}". Available bills: ${availableBills}. ${selectedBill ? `Available plans for ${selectedBill.provider}: ${availablePlans}` : ''}`
           };
         }
+        break;
+
+      case 'select_payment_option':
+        const { option } = parsedArgs;
+        console.log('🎤 Voice selected payment option:', option, 'parsedArgs:', parsedArgs);
+        // Ensure option is lowercased for comparison in App.tsx
+        let normalizedOption = option?.toLowerCase();
+
+        // Fix potential AI mismatches
+        if (normalizedOption.includes('carecredit') && normalizedOption.includes('card')) {
+          normalizedOption = 'carecredit-card';
+        } else if (normalizedOption.includes('account') && normalizedOption.includes('lookup')) {
+          normalizedOption = 'account-lookup';
+        } else if (normalizedOption.includes('apply')) {
+          normalizedOption = 'apply-new';
+        }
+
+        let message = '';
+
+        if (typeof window !== 'undefined') {
+          if (normalizedOption === 'apply-new') {
+            window.dispatchEvent(new Event('applyForCard'));
+            message = 'Opening application for new CareCredit card.';
+          } else {
+            // Dispatch a generic event for other options that App.tsx can listen to
+            // We'll reuse the same pattern - App.tsx listens for specific events or we can make a new one
+            console.log('Dispatching paymentOptionSelected event:', normalizedOption);
+            // Call the callback directly if available
+            if (paymentOptionCallbackRef.current) {
+              console.log('📞 Calling onPaymentOptionSelect prop directly');
+              paymentOptionCallbackRef.current(normalizedOption);
+            } else {
+              // Fallback to event
+              window.dispatchEvent(new CustomEvent('paymentOptionSelected', {
+                detail: { option: normalizedOption }
+              }));
+            }
+
+            if (normalizedOption === 'account-lookup') {
+              message = `I've opened the account lookup screen. Please select your account to continue.`;
+            } else if (normalizedOption === 'carecredit-card') {
+              message = `I've opened the secure payment form. Please enter your card details.`;
+            } else {
+              message = `Selected payment option: ${normalizedOption}.`;
+            }
+          }
+        }
+
+        result = {
+          success: true,
+          message: message
+        };
+        break;
+
+      case 'select_account':
+        const { account_identifier } = parsedArgs;
+        console.log('🎤 Voice selected account identifier:', account_identifier);
+
+        let accountMessage = '';
+        if (typeof window !== 'undefined') {
+          // We can infer the account based on identifier (simplified logic)
+          // In a real app, this would match against the actual list of accounts
+          let accountDetail = { id: 'acc_1', last4: '5678', type: 'CareCredit Rewards' };
+
+          if (account_identifier.includes('4321')) {
+            accountDetail = { id: 'acc_2', last4: '4321', type: 'CareCredit Standard' };
+          }
+
+          console.log('Dispatching accountSelected event:', accountDetail);
+          window.dispatchEvent(new CustomEvent('accountSelected', {
+            detail: accountDetail
+          }));
+          // IMPORTANT: Do NOT say "payment successful" here. Just say the details are ready relative to the user's action.
+          // But since our app logic currently auto-confirms, we might need to adjust the App logic first if we want manual confirmation.
+          // However, based on the user's request "when user not clicked on paynow but open ai is saying payment sucessful",
+          // it implies the AI *thinks* it's done.
+          // The "payment successful" message usually comes from the 'process_payment' tool or a manual completion event.
+
+          // Let's check `App.tsx`: `handleAccountSelect` calls `handlePaymentConfirmed`.
+          // This auto-confirms the payment immediately upon account selection.
+          // We need to change `App.tsx` to SHOW the confirmation screen (or a review screen) but NOT finalize it until user says "Pay" or clicks "Pay".
+
+          // For now, let's change the AI's response to be accurate to the current state (which is "Payment Confirmed" screen).
+          accountMessage = `I've selected the account ending in ${accountDetail.last4}. Please confirm the payment details on the screen to proceed.`;
+        }
+
+        result = {
+          success: true,
+          message: accountMessage
+        };
+        break;
         break;
 
       case 'process_payment':
@@ -227,6 +349,17 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
         break;
 
 
+      case 'apply_for_card':
+        if (typeof window !== 'undefined') {
+          console.log('Dispatching applyForCard event');
+          window.dispatchEvent(new CustomEvent('applyForCard'));
+        }
+        result = {
+          success: true,
+          message: 'I have provided the link to apply for a new CareCredit card in the chat.'
+        };
+        break;
+
       case 'send_receipt':
         result = {
           success: true,
@@ -244,37 +377,78 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
   }, [addMessageToHistory]);
 
   const handleTranscript = useCallback((event: RealtimeEvent) => {
-    console.log('🎤 Voice transcript event:', event.type, event);
+    // console.log('🎤 Voice transcript event:', event.type);
 
     if (event.type === 'conversation.item.input_audio_transcription.completed') {
       setTranscript(event.transcript || '');
       if (event.transcript) {
         console.log('👤 User voice message:', event.transcript);
-        // Don't add to history here - it will be synced via voiceMessages prop
-        // addMessageToHistory({
-        //   id: Date.now().toString(),
-        //   text: event.transcript,
-        //   sender: 'user',
-        //   timestamp: new Date()
-        // });
       }
     } else if (event.type === 'response.audio_transcript.delta') {
-      setTranscript(prev => prev + (event.delta || ''));
+      const delta = event.delta || '';
+      setTranscript(prev => prev + delta);
+      latestTranscriptRef.current += delta;
     } else if (event.type === 'response.audio_transcript.done') {
-      if (event.transcript) {
-        console.log('🤖 Bot voice response:', event.transcript);
-        // Create a unique ID based on transcript content and timestamp to help with duplicate detection
-        const messageId = `voice-bot-${Date.now()}-${event.transcript.substring(0, 20).replace(/\s/g, '-')}`;
+      // Check if this specific response was interrupted
+      const responseId = (event as any).response_id;
+      const wasInterrupted = responseId && interruptedResponseIds.current.has(responseId);
+
+      // If we were interrupted, use the partial transcript we captured
+      // If not, use the full transcript provided by the event
+      const finalTranscript = wasInterrupted
+        ? latestTranscriptRef.current + '...' // Add ellipsis to indicate interruption
+        : (event.transcript || latestTranscriptRef.current);
+
+      if (finalTranscript) {
+        console.log('🤖 Bot voice response (saved):', finalTranscript);
+        console.log(`INFO: Response ${responseId} interrupted state:`, wasInterrupted);
+
+        const messageId = `voice-bot-${Date.now()}-${finalTranscript.substring(0, 20).replace(/\s/g, '-')}`;
         addMessageToHistory({
           id: messageId,
-          text: event.transcript,
+          text: finalTranscript,
           sender: 'bot',
           timestamp: new Date()
         });
+
+        // Safety fallback: If AI says it's showing bills but didn't call the tool, force the UI update
+        const lowerTranscript = finalTranscript.toLowerCase();
+        if (lowerTranscript.includes('here are your remaining bills') ||
+          lowerTranscript.includes('displayed your bills') ||
+          lowerTranscript.includes('bringing up your bills')) {
+          console.log('🛡️ Safety Fallback: AI mentioned showing bills. Dispatching billsRequested event.');
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('billsRequested'));
+          }
+        }
+      }
+
+      // Cleanup
+      if (responseId) {
+        interruptedResponseIds.current.delete(responseId);
       }
       setTranscript('');
+      latestTranscriptRef.current = '';
     }
   }, [addMessageToHistory]);
+
+  const handleResponseCreated = useCallback((event: any) => {
+    if (event.response && event.response.id) {
+      console.log('🎬 Response created:', event.response.id);
+      currentResponseId.current = event.response.id;
+      // Reset transcript accumulator for new response
+      latestTranscriptRef.current = '';
+    }
+  }, []);
+
+  const handleSpeechStarted = useCallback(() => {
+    console.log('🗣️ User started speaking');
+    // Mark the current response as interrupted
+    if (currentResponseId.current) {
+      console.log('🚫 Marking response as interrupted:', currentResponseId.current);
+      interruptedResponseIds.current.add(currentResponseId.current);
+    }
+  }, []);
 
   const toggleVoiceMode = useCallback(async () => {
     if (isVoiceMode) {
@@ -283,6 +457,8 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
       realtimeService.off('conversation.item.input_audio_transcription.completed', handleTranscript);
       realtimeService.off('response.audio_transcript.delta', handleTranscript);
       realtimeService.off('response.audio_transcript.done', handleTranscript);
+      realtimeService.off('response.created', handleResponseCreated);
+      realtimeService.off('input_audio_buffer.speech_started', handleSpeechStarted);
 
       realtimeService.stopRecording();
       realtimeService.disconnect();
@@ -299,8 +475,11 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
         realtimeService.on('conversation.item.input_audio_transcription.completed', handleTranscript);
         realtimeService.on('response.audio_transcript.delta', handleTranscript);
         realtimeService.on('response.audio_transcript.done', handleTranscript);
+        realtimeService.on('response.created', handleResponseCreated);
+        realtimeService.on('input_audio_buffer.speech_started', handleSpeechStarted);
+
         realtimeService.on('response.audio.delta', () => {
-          console.log('🔊 Audio delta received in VoiceModeContext');
+          // console.log('🔊 Audio delta received in VoiceModeContext');
         });
         realtimeService.on('response.audio.done', () => {
           console.log('✅ Audio response complete in VoiceModeContext');
@@ -329,7 +508,7 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
         setIsConnecting(false);
       }
     }
-  }, [isVoiceMode, handleFunctionCall, handleTranscript, addMessageToHistory]);
+  }, [isVoiceMode, handleFunctionCall, handleTranscript, handleResponseCreated, handleSpeechStarted, addMessageToHistory]);
 
   const startRecording = useCallback(async () => {
     if (!isVoiceMode || isRecording) return;
@@ -403,7 +582,7 @@ export const VoiceModeProvider: React.FC<VoiceModeProviderProps> = ({ children, 
         console.log('💳 VoiceMode: Payment completed by user via button', event.detail);
 
         // Send a message to the AI to inform it about the payment
-        sendTextMessage(`Payment successful! Confirmation number: ${confirmationNumber}. Amount: $${amount} for ${provider}.`);
+        sendTextMessage(`I have successfully completed the payment. Confirmation number: ${confirmationNumber}. Amount: $${amount} for ${provider}.`);
       }
     };
 

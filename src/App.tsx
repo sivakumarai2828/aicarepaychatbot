@@ -2,7 +2,7 @@ import { ChatWindow } from './components/chat';
 import { VoiceModeProvider } from './contexts/VoiceModeContext';
 import { PaymentConfirmation } from './components/PaymentConfirmation/PaymentConfirmation';
 import { SecurePaymentForm } from './components/SecurePaymentForm/SecurePaymentForm';
-import { WelcomeView, BillsView, PaymentPlansView } from './components/views';
+import { WelcomeView, BillsView, PaymentPlansView, PaymentOptionsView, AccountLookupView } from './components/views';
 import { useState, useCallback, useEffect } from 'react';
 import { PaymentSummary } from './types/interfaces';
 import type { Message } from './types/chat';
@@ -26,6 +26,9 @@ function App() {
   // New view state management
   const [currentView, setCurrentView] = useState<ViewState>('welcome');
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<PaymentPlan | null>(null);
+
+
 
   const handleVoiceMessage = useCallback((message: Message) => {
     console.log('📨 App received voice message:', message);
@@ -62,8 +65,10 @@ function App() {
 
   const handlePlanSelect = useCallback((plan: PaymentPlan) => {
     console.log('📅 Plan selected:', plan);
-    // This would trigger the payment form
-    // For now, we'll keep using the existing flow
+    setSelectedPlan(plan);
+    setShowPaymentForm(false); // Ensure form is hidden so options view can show
+    setPaymentFormData(null);
+    setCurrentView('payment-options');
   }, []);
 
   const handlePaymentConfirmed = useCallback((data: {
@@ -93,6 +98,90 @@ function App() {
     setShowConfirmation(false);
     setCurrentView('payment-form');
   }, []);
+
+  const handlePaymentOptionSelect = useCallback((option: string) => {
+    console.log('💳 Payment option selected:', option, 'Current plan:', selectedPlan);
+
+    // Allow account lookup even if selectedPlan is missing (for debugging)
+    if (option === 'account-lookup') {
+      console.log('👀 Switching to account-lookup view');
+      setCurrentView('account-lookup');
+      return;
+    }
+
+    if (selectedPlan) {
+
+      if (option === 'apply-new') {
+        const urlMessage: Message = {
+          id: Date.now().toString(),
+          text: 'To apply for a new card, Click the following URL: https://www.myhealthsystem.com/apply',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+
+        const followUpMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: 'Is there anything else I can help you with today?',
+          sender: 'bot',
+          timestamp: new Date(Date.now() + 100)
+        };
+
+        setChatMessages(prev => [...prev, urlMessage, followUpMessage]);
+        return;
+      }
+
+      // Explicitly handle carecredit-card to ensure form opens
+      if (option === 'carecredit-card' || option === 'payment' || option === 'pay') {
+        const summary: PaymentSummary = {
+          balance: selectedPlan.monthlyPayment || (selectedPlan as any).amount || 0,
+          planType: `${selectedPlan.months} Months Plan`,
+          monthlyPayment: selectedPlan.monthlyPayment || (selectedPlan as any).amount || 0,
+          totalMonths: selectedPlan.months,
+          firstPaymentDate: new Date().toISOString(),
+          provider: selectedBill?.provider || 'CareCredit'
+        };
+        handleShowPaymentForm(summary);
+        return;
+      }
+
+      const summary: PaymentSummary = {
+        balance: selectedPlan.monthlyPayment || (selectedPlan as any).amount || 0,
+        planType: `${selectedPlan.months} Months Plan`,
+        monthlyPayment: selectedPlan.monthlyPayment || (selectedPlan as any).amount || 0,
+        totalMonths: selectedPlan.months,
+        firstPaymentDate: new Date().toISOString(),
+        provider: selectedBill?.provider || 'CareCredit'
+      };
+      handleShowPaymentForm(summary);
+    }
+  }, [selectedPlan, selectedBill, handleShowPaymentForm]);
+
+  const handleAccountSelect = useCallback((account: any) => {
+    console.log('👤 Account selected:', account);
+    console.log('Current selectedPlan state:', selectedPlan);
+
+    if (selectedPlan) {
+      // Ensure we have valid numbers, providing fallbacks
+      const monthlyPayment = selectedPlan.monthlyPayment || (selectedPlan as any).amount || 0;
+      const totalMonths = selectedPlan.months || 12;
+      const planLabel = selectedPlan.label || (selectedPlan.months ? `${selectedPlan.months} Months Plan` : 'Standard Plan');
+
+      const summary: PaymentSummary = {
+        balance: monthlyPayment, // Using monthly payment as the balance for the form display if that's the intent
+        planType: planLabel,
+        monthlyPayment: monthlyPayment,
+        totalMonths: totalMonths,
+        firstPaymentDate: new Date().toISOString(),
+        provider: `CareCredit (...${account.last4})`
+      };
+
+      console.log('💰 Constructed Payment Summary for Form:', summary);
+
+      // Just showing the form with the pre-filled account details
+      // User must still click "Pay Now" or say "Confirm Payment"
+      handleShowPaymentForm(summary);
+    }
+  }, [selectedPlan, handlePaymentConfirmed]);
 
   const handlePaymentFormClose = useCallback(() => {
     console.log('🔒 App: Closing payment form');
@@ -150,6 +239,13 @@ function App() {
 
   const handleViewChange = useCallback((view: 'welcome' | 'bills' | 'payment-plans', data?: any) => {
     console.log('🎨 View change requested:', view, data);
+
+    // Clear confirmation state when view changes
+    setShowConfirmation(false);
+    setConfirmationData(null);
+    setShowPaymentForm(false);
+    setPaymentFormData(null);
+
     setCurrentView(view);
     if (view === 'payment-plans' && data?.bill) {
       setSelectedBill(data.bill);
@@ -169,6 +265,62 @@ function App() {
       window.removeEventListener('paymentProcessed', handlePaymentProcessed as EventListener);
     };
   }, [handlePaymentComplete]);
+
+  // Listen for bills requested events from VoiceModeContext
+  useEffect(() => {
+    const handleBillsRequested = () => {
+      console.log('📋 App: Bills requested event received');
+
+      // Reset confirmation state if active
+      setShowConfirmation(false);
+      setConfirmationData(null);
+      setShowPaymentForm(false);
+      setPaymentFormData(null);
+
+      setCurrentView('bills');
+    };
+
+    window.addEventListener('billsRequested', handleBillsRequested as EventListener);
+
+    return () => {
+      window.removeEventListener('billsRequested', handleBillsRequested as EventListener);
+    };
+  }, []);
+
+  // Listen for voice-triggered events
+  useEffect(() => {
+    const handleApplyForCard = () => {
+      handlePaymentOptionSelect('apply-new');
+    };
+
+    const handlePlanSelected = (event: CustomEvent) => {
+      console.log('📢 App received planSelected event:', event.detail);
+      handlePlanSelect(event.detail);
+    };
+
+    const handlePaymentOptionSelected = (event: CustomEvent) => {
+      console.log('📢 App received paymentOptionSelected event:', event.detail);
+      handlePaymentOptionSelect(event.detail.option);
+    };
+
+    window.addEventListener('applyForCard', handleApplyForCard);
+    window.addEventListener('planSelected', handlePlanSelected as EventListener);
+    window.addEventListener('paymentOptionSelected', handlePaymentOptionSelected as EventListener);
+
+    const handleAccountSelectedVoice = (event: CustomEvent) => {
+      console.log('📢 App received accountSelected event:', event.detail);
+      handleAccountSelect(event.detail);
+    };
+    window.addEventListener('accountSelected', handleAccountSelectedVoice as EventListener);
+
+    return () => {
+      window.removeEventListener('applyForCard', handleApplyForCard);
+      window.removeEventListener('planSelected', handlePlanSelected as EventListener);
+      window.removeEventListener('paymentOptionSelected', handlePaymentOptionSelected as EventListener);
+      window.removeEventListener('accountSelected', handleAccountSelectedVoice as EventListener);
+    };
+  }, [handlePaymentOptionSelect, handlePlanSelect, handleAccountSelect]);
+
 
   // Render the appropriate view based on current state
   const renderMainContent = () => {
@@ -207,6 +359,21 @@ function App() {
           <WelcomeView />
         );
 
+      case 'payment-options':
+        return (
+          <PaymentOptionsView
+            onOptionSelect={handlePaymentOptionSelect}
+            selectedPlan={selectedPlan}
+          />
+        );
+
+      case 'account-lookup':
+        return (
+          <AccountLookupView
+            onAccountSelect={handleAccountSelect}
+          />
+        );
+
       case 'welcome':
       default:
         return <WelcomeView />;
@@ -214,7 +381,10 @@ function App() {
   };
 
   return (
-    <VoiceModeProvider onMessage={handleVoiceMessage}>
+    <VoiceModeProvider
+      onMessage={handleVoiceMessage}
+      onPaymentOptionSelect={handlePaymentOptionSelect} // Pass this directly!
+    >
       <div className="relative min-h-screen flex">
         {/* Main Content Area - Left Side (70%) */}
         <div className="flex-1 overflow-auto">

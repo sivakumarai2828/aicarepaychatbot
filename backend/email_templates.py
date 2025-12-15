@@ -72,16 +72,17 @@ def get_receipt_html(transaction_id, amount, date, payment_method):
             padding: 24px;
             margin-bottom: 32px;
         }}
-        .receipt-row {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .receipt-table {{
+            width: 100%;
+            border-collapse: collapse;
+        }}
+        .receipt-table td {{
             padding: 12px 0;
             border-bottom: 1px solid #e2e8f0;
+            vertical-align: middle;
         }}
-        .receipt-row:last-child {{
+        .receipt-table tr:last-child td {{
             border-bottom: none;
-            margin-top: 8px;
             padding-top: 20px;
             border-top: 2px solid #cbd5e1;
         }}
@@ -89,17 +90,21 @@ def get_receipt_html(transaction_id, amount, date, payment_method):
             color: #64748b;
             font-size: 14px;
             font-weight: 500;
+            text-align: left;
+            padding-right: 20px;
         }}
         .receipt-value {{
             color: #0f172a;
             font-size: 15px;
             font-weight: 600;
+            text-align: right;
         }}
-        .receipt-row:last-child .receipt-label {{
+        .total-row .receipt-label {{
             font-size: 16px;
             color: #0f172a;
+            font-weight: 700;
         }}
-        .receipt-row:last-child .receipt-value {{
+        .total-row .receipt-value {{
             font-size: 24px;
             color: #0d9488;
             font-weight: 700;
@@ -178,22 +183,24 @@ def get_receipt_html(transaction_id, amount, date, payment_method):
             
             <!-- Receipt Card -->
             <div class="receipt-card">
-                <div class="receipt-row">
-                    <span class="receipt-label">Transaction ID</span>
-                    <span class="receipt-value">{transaction_id}</span>
-                </div>
-                <div class="receipt-row">
-                    <span class="receipt-label">Date</span>
-                    <span class="receipt-value">{date}</span>
-                </div>
-                <div class="receipt-row">
-                    <span class="receipt-label">Payment Method</span>
-                    <span class="receipt-value">{payment_method}</span>
-                </div>
-                <div class="receipt-row">
-                    <span class="receipt-label">Amount Paid</span>
-                    <span class="receipt-value">${amount}</span>
-                </div>
+                <table class="receipt-table" width="100%" border="0" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td class="receipt-label" width="40%">Transaction ID</td>
+                        <td class="receipt-value">{transaction_id}</td>
+                    </tr>
+                    <tr>
+                        <td class="receipt-label">Date</td>
+                        <td class="receipt-value">{date}</td>
+                    </tr>
+                    <tr>
+                        <td class="receipt-label">Payment Method</td>
+                        <td class="receipt-value">{payment_method}</td>
+                    </tr>
+                    <tr class="total-row">
+                        <td class="receipt-label">Amount Paid</td>
+                        <td class="receipt-value">${amount}</td>
+                    </tr>
+                </table>
             </div>
             
             <!-- CTA Button -->

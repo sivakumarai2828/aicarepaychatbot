@@ -61,8 +61,8 @@ export const PaymentPlansView: React.FC<PaymentPlansViewProps> = ({ bill, onPlan
 
                                 {/* Card Header */}
                                 <div className={`p-6 ${isPopular
-                                        ? 'bg-gradient-to-r from-teal-500 to-teal-600'
-                                        : 'bg-gradient-to-r from-gray-600 to-gray-700'
+                                    ? 'bg-gradient-to-r from-teal-500 to-teal-600'
+                                    : 'bg-gradient-to-r from-gray-600 to-gray-700'
                                     }`}>
                                     <div className="text-center">
                                         <p className="text-white/80 text-sm font-medium mb-2">
@@ -124,10 +124,15 @@ export const PaymentPlansView: React.FC<PaymentPlansViewProps> = ({ bill, onPlan
                                     </div>
 
                                     {/* Select Button */}
-                                    <button className={`w-full py-3 font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2 ${isPopular
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onPlanSelect?.(plan);
+                                        }}
+                                        className={`w-full py-3 font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2 ${isPopular
                                             ? 'bg-teal-500 hover:bg-teal-600 text-white shadow-lg hover:shadow-xl'
                                             : 'bg-gray-100 hover:bg-gray-200 text-gray-800'
-                                        }`}>
+                                            }`}>
                                         <span>Select Plan</span>
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -155,7 +160,17 @@ export const PaymentPlansView: React.FC<PaymentPlansViewProps> = ({ bill, onPlan
                         <div className="text-right">
                             <p className="text-green-100 text-sm mb-1">One-time payment</p>
                             <p className="text-5xl font-bold mb-4">${bill.amount.toFixed(2)}</p>
-                            <button className="px-8 py-3 bg-white text-green-600 font-semibold rounded-lg hover:bg-green-50 transition-colors duration-200">
+                            <button
+                                onClick={() => onPlanSelect?.({
+                                    id: 'pay-in-full',
+                                    type: 'no_interest',
+                                    months: 1,
+                                    monthlyPayment: bill.amount,
+                                    label: 'Pay in Full',
+                                    details: 'One-time payment'
+                                })}
+                                className="px-8 py-3 bg-white text-green-600 font-semibold rounded-lg hover:bg-green-50 transition-colors duration-200"
+                            >
                                 Pay Now
                             </button>
                         </div>

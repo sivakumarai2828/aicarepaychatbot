@@ -1,0 +1,1 @@
+export { PaymentOptionsView } from './PaymentOptionsView';

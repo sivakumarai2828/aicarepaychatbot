@@ -24,10 +24,20 @@ export const SecurePaymentForm: React.FC<SecurePaymentFormProps> = ({
       console.log('🎯 SecurePaymentForm: Global completion callback triggered');
       onPaymentComplete();
     };
-    return () => {
-      delete window.paymentFormCompletionCallback;
-    };
-  }, [onPaymentComplete]);
+
+    // Auto-fill if account details are passed in provider string (e.g. "CareCredit (...5678)")
+    if (paymentSummary.provider && paymentSummary.provider.includes('...')) {
+      const match = paymentSummary.provider.match(/\.\.\.(\d{4})/);
+      if (match) {
+        setCardNumber(`**** **** **** ${match[1]}`);
+        setName('Sivakumar'); // Updated name
+        setExpiry('12/28');
+        setCvv('***');
+      }
+    }
+  }, [onPaymentComplete, paymentSummary.provider]); // Added dependency array for useEffect
+
+  const isSavedCard = paymentSummary.provider && paymentSummary.provider.includes('...');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +57,7 @@ export const SecurePaymentForm: React.FC<SecurePaymentFormProps> = ({
     <div className="min-h-screen bg-gradient-to-b from-teal-50 to-white flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-6">Secure Payment</h2>
-        
+
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
           <div className="flex justify-between mb-2">
             <span className="text-gray-600">Provider:</span>
@@ -55,17 +65,21 @@ export const SecurePaymentForm: React.FC<SecurePaymentFormProps> = ({
           </div>
           <div className="flex justify-between mb-2">
             <span className="text-gray-600">Amount:</span>
-            <span className="font-semibold text-teal-600">${paymentSummary.balance.toFixed(2)}</span>
+            <span className="font-semibold text-teal-600">${paymentSummary?.balance?.toFixed(2) || '0.00'}</span>
           </div>
-          {paymentSummary.planType !== 'full' && (
+          {paymentSummary?.planType !== 'full' && (
             <>
               <div className="flex justify-between mb-2">
+                <span className="text-gray-600">Payment Plan:</span>
+                <span className="font-semibold text-right">{paymentSummary?.planType}</span>
+              </div>
+              <div className="flex justify-between mb-2">
                 <span className="text-gray-600">Monthly Payment:</span>
-                <span className="font-semibold">${paymentSummary.monthlyPayment.toFixed(2)}</span>
+                <span className="font-semibold">${paymentSummary?.monthlyPayment?.toFixed(2) || '0.00'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Term:</span>
-                <span className="font-semibold">{paymentSummary.totalMonths} months</span>
+                <span className="font-semibold">{paymentSummary?.totalMonths} months</span>
               </div>
             </>
           )}
@@ -99,34 +113,36 @@ export const SecurePaymentForm: React.FC<SecurePaymentFormProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Expiry Date
-              </label>
-              <input
-                type="text"
-                value={expiry}
-                onChange={(e) => setExpiry(e.target.value.replace(/\D/g, '').slice(0, 4).replace(/(\d{2})(\d{0,2})/, '$1/$2'))}
-                placeholder="MM/YY"
-                className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                required
-              />
+          {!isSavedCard && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Expiry Date
+                </label>
+                <input
+                  type="text"
+                  value={expiry}
+                  onChange={(e) => setExpiry(e.target.value.replace(/\D/g, '').slice(0, 4).replace(/(\d{2})(\d{0,2})/, '$1/$2'))}
+                  placeholder="MM/YY"
+                  className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  CVV
+                </label>
+                <input
+                  type="text"
+                  value={cvv}
+                  onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 3))}
+                  placeholder="123"
+                  className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  required
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                CVV
-              </label>
-              <input
-                type="text"
-                value={cvv}
-                onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 3))}
-                placeholder="123"
-                className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                required
-              />
-            </div>
-          </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <button
@@ -149,4 +165,3 @@ export const SecurePaymentForm: React.FC<SecurePaymentFormProps> = ({
     </div>
   );
 };
-
