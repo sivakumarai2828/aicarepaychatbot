@@ -3,6 +3,7 @@ import { VoiceModeProvider } from './contexts/VoiceModeContext';
 import { PaymentConfirmation } from './components/PaymentConfirmation/PaymentConfirmation';
 import { SecurePaymentForm } from './components/SecurePaymentForm/SecurePaymentForm';
 import { WelcomeView, BillsView, PaymentPlansView, PaymentOptionsView, AccountLookupView } from './components/views';
+import { PasswordGate } from './components/PasswordGate/PasswordGate';
 import { useState, useCallback, useEffect } from 'react';
 import { PaymentSummary } from './types/interfaces';
 import type { Message } from './types/chat';
@@ -380,34 +381,39 @@ function App() {
     }
   };
 
+  console.log('🎨 App rendering, isAuthorized will be checked by PasswordGate');
   return (
-    <VoiceModeProvider
-      onMessage={handleVoiceMessage}
-      onPaymentOptionSelect={handlePaymentOptionSelect} // Pass this directly!
-    >
-      <div className="relative min-h-screen flex">
-        {/* Main Content Area - Left Side (70%) */}
-        <div className="flex-1 overflow-auto">
-          {renderMainContent()}
-        </div>
+    <PasswordGate>
+      <VoiceModeProvider
+        onMessage={handleVoiceMessage}
+        onPaymentOptionSelect={handlePaymentOptionSelect} // Pass this directly!
+      >
+        <div className="relative min-h-screen flex bg-white overflow-hidden">
+          {/* Main Content Area - Left Side (70%) */}
+          <div className="flex-1 overflow-auto relative z-10">
 
-        {/* Chat Panel - Right Side (30%) */}
-        <ChatWindow
-          onPaymentConfirmed={handlePaymentConfirmed}
-          onShowPaymentForm={handleShowPaymentForm}
-          onViewChange={handleViewChange}
-          onChatStateChange={(isOpen) => {
-            // Handle chat state changes if needed
-            console.log('Chat is', isOpen ? 'open' : 'closed');
-          }}
-          onBackgroundChange={(showMain) => {
-            // Handle background changes if needed
-            console.log('Background change:', showMain);
-          }}
-          voiceMessages={chatMessages}
-        />
-      </div>
-    </VoiceModeProvider>
+
+            {renderMainContent()}
+          </div>
+
+          {/* Chat Panel - Right Side (30%) */}
+          <ChatWindow
+            onPaymentConfirmed={handlePaymentConfirmed}
+            onShowPaymentForm={handleShowPaymentForm}
+            onViewChange={handleViewChange}
+            onChatStateChange={(isOpen) => {
+              // Handle chat state changes if needed
+              console.log('Chat is', isOpen ? 'open' : 'closed');
+            }}
+            onBackgroundChange={(showMain) => {
+              // Handle background changes if needed
+              console.log('Background change:', showMain);
+            }}
+            voiceMessages={chatMessages}
+          />
+        </div>
+      </VoiceModeProvider>
+    </PasswordGate>
   );
 }
 
