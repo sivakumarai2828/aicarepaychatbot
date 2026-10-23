@@ -54,7 +54,18 @@ if resend_api_key:
 else:
     logger.warning("RESEND_API_KEY not found in environment variables")
 
-OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
+OPENAI_REALTIME_URL = "wss://api.openai.com/v1/realtime?model=gpt-realtime"
+
+# The GA Realtime API renamed some server events. The frontend still listens for
+# the original (beta) names, so translate them before forwarding.
+GA_TO_BETA_EVENT_NAMES = {
+    "response.output_audio.delta": "response.audio.delta",
+    "response.output_audio.done": "response.audio.done",
+    "response.output_audio_transcript.delta": "response.audio_transcript.delta",
+    "response.output_audio_transcript.done": "response.audio_transcript.done",
+    "response.output_text.delta": "response.text.delta",
+    "response.output_text.done": "response.text.done",
+}
 
 
 # ============================================================================
@@ -424,8 +435,7 @@ async def proxy_openai_realtime(client_ws: WebSocket, session_id: str, voice_con
     try:
         # Connect to OpenAI Real-Time API
         headers = {
-            "Authorization": f"Bearer {openai_api_key}",
-            "OpenAI-Beta": "realtime=v1"
+            "Authorization": f"Bearer {openai_api_key}"
         }
         
         logger.info(f"🔌 Connecting to OpenAI Real-Time API for session {session_id}...")
@@ -463,24 +473,30 @@ async def proxy_openai_realtime(client_ws: WebSocket, session_id: str, voice_con
             session_config = {
                 "type": "session.update",
                 "session": {
-                    "modalities": ["text", "audio"],
+                    "type": "realtime",
+                    "output_modalities": ["audio"],
                     "instructions": get_system_instructions(),
-                    "voice": voice_config.voice,
-                    "input_audio_format": "pcm16",
-                    "output_audio_format": "pcm16",
-                    "input_audio_transcription": {
-                        "model": "whisper-1"
-                    },
-                    "turn_detection": {
-                        "type": "server_vad",
-                        "threshold": voice_config.vad_threshold,
-                        "prefix_padding_ms": voice_config.vad_prefix_padding_ms,
-                        "silence_duration_ms": voice_config.vad_silence_duration_ms
+                    "audio": {
+                        "input": {
+                            "format": {"type": "audio/pcm", "rate": 24000},
+                            "transcription": {
+                                "model": "whisper-1"
+                            },
+                            "turn_detection": {
+                                "type": "server_vad",
+                                "threshold": voice_config.vad_threshold,
+                                "prefix_padding_ms": voice_config.vad_prefix_padding_ms,
+                                "silence_duration_ms": voice_config.vad_silence_duration_ms
+                            }
+                        },
+                        "output": {
+                            "format": {"type": "audio/pcm", "rate": 24000},
+                            "voice": voice_config.voice
+                        }
                     },
                     "tools": get_tools(),
                     "tool_choice": "auto",
-                    "temperature": voice_config.temperature,
-                    "max_response_output_tokens": voice_config.max_response_output_tokens
+                    "max_output_tokens": voice_config.max_response_output_tokens
                 }
             }
             
@@ -575,6 +591,11 @@ async def proxy_openai_realtime(client_ws: WebSocket, session_id: str, voice_con
                     async for message in openai_ws:
                         try:
                             data = json.loads(message)
+                            
+                            beta_name = GA_TO_BETA_EVENT_NAMES.get(data.get("type"))
+                            if beta_name:
+                                data["type"] = beta_name
+                                message = json.dumps(data)
                             
                             # Forward all messages to client
                             await client_ws.send_text(message)
